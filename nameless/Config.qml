@@ -100,7 +100,7 @@ Singleton {
         orbit: { enabled: true, bar: true, dock: true, indock: false, autostart: true, claude: true, claudeMin: 20 },   // claude — сообщать на устройства, что Claude закончил работу; claudeMin — не короче стольких секунд             // верхний док устройств; запуск Orbit в фоне, когда он нужен
         // переход курсора между компьютерами (Orbit): links — [{ device, name, side }], side — край этого экрана (left|right|top|bottom|off);
         // effect — glow | ripple | sparks | line | portal | none; color — accent | accent2 | white | #RRGGBB; delay — задержка на краю, мс
-        crossing: { enabled: false, effect: "glow", effectOut: "", effectIn: "", color: "accent", duration: 700, intensity: 1.0, delay: 120, links: [], scenes: { out: true, in: true, deny: true, link: true, hint: true } },
+        crossing: { enabled: false, effect: "auto", effectOut: "", effectIn: "", color: "accent", duration: 700, intensity: 1.0, delay: 120, links: [], scenes: { out: true, in: true, deny: true, link: true, hint: true } },
         touchpad: { left: "", right: "", middle: "", dot: "", dotSize: 9 },        // цвета — имя цвета темы (accent, red, green…) или #RRGGBB; пусто — по умолчанию
         claude: { view: "rings" },                          // rings | bars
         tokens: { view: "chart" },                          // chart | numbers

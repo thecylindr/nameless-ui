@@ -1216,19 +1216,19 @@ ShellRoot {
 
             GSection {
                 ui: look; title: Tr.t("Эффект на краях")
-                Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("где курсор ушёл и где пришёл — на обоих компьютерах. Этот выбор — общий; ниже можно задать отдельный эффект для ухода и для прихода"); color: look.sub; font.family: look.font; font.pixelSize: 12 }
+                Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("где курсор ушёл и где пришёл — на обоих компьютерах. «Авто» подбирает эффект по случаю: комета при уходе, эхо при приходе, тише на полном экране, при записи и на низком заряде. Этот выбор — общий; ниже можно задать отдельный эффект для ухода и для прихода"); color: look.sub; font.family: look.font; font.pixelSize: 12 }
                 Flow {
                     width: parent.width
                     spacing: 8
                     Repeater {
-                        model: [{ v: "glow", t: Tr.t("Свечение"), i: "󰛨" }, { v: "ripple", t: Tr.t("Волна"), i: "󰖟" }, { v: "sparks", t: Tr.t("Искры"), i: "󰸞" },
+                        model: [{ v: "auto", t: Tr.t("Авто"), i: "󰁨" }, { v: "glow", t: Tr.t("Свечение"), i: "󰛨" }, { v: "ripple", t: Tr.t("Волна"), i: "󰖟" }, { v: "sparks", t: Tr.t("Искры"), i: "󰸞" },
                                 { v: "line", t: Tr.t("Линия"), i: "󰕞" }, { v: "portal", t: Tr.t("Портал"), i: "󰕰" }, { v: "comet", t: Tr.t("Комета"), i: "󰓅" },
                                 { v: "aurora", t: Tr.t("Сияние"), i: "󱓻" }, { v: "burst", t: Tr.t("Лучи"), i: "󰇁" }, { v: "echo", t: Tr.t("Эхо"), i: "󰝚" }, { v: "none", t: Tr.t("Без эффекта"), i: "󰜺" }]
                         GTile {
                             required property var modelData
                             ui: look
                             width: 104; height: 70
-                            on: (root.cross.effect || "glow") === modelData.v
+                            on: (root.cross.effect || "auto") === modelData.v
                             onClicked: { root.crossSet("effect", modelData.v); if (modelData.v !== "none") prevT.restart(); }
                             Column {
                                 anchors.centerIn: parent

@@ -81,21 +81,45 @@ Scope {
     property var fx: []                    // идущие эффекты: { n, dir, side, pos, screen, kind, kk }
     property int fxN: 0
     function scene(name) { return !cfg.scenes || cfg.scenes[name] !== false; }
+    // «Авто»: эффект выбирается по случаю, а не один на все: уход — комета, приход — эхо (если сразу после ухода — линия, чтобы не рябило), подсказка — свечение,
+    // сосед — сияние, отказ — красный крест. Тише или совсем без эффекта: на полноэкранном окне (игра, видео), во время записи экрана, на низком заряде
+    // без зарядки. Размер подстраивается под монитор — на 4K крупнее, на малом экране мельче
+    readonly property bool calm: {
+        var t = Hyprland.activeToplevel;
+        var fs = t && t.lastIpcObject && t.lastIpcObject.fullscreen > 0;
+        return fs === true || Recorder.recording === true;
+    }
+    readonly property bool saving: Sys.hasBattery && !Sys.charging && Sys.batPct <= 20
+    property double lastOut: 0
+    function autoKind(dir) {
+        if (dir === "deny") return "deny";
+        if (saving) return dir === "hint" ? "none" : "line";
+        if (calm) return dir === "hint" || dir === "link" ? "none" : "line";
+        if (dir === "hint") return "glow";
+        if (dir === "out") return "comet";
+        if (dir === "link") return "aurora";
+        return Date.now() - lastOut < 2500 ? "line" : "echo";
+    }
+    function sizeK(screenName) {
+        for (var i = 0; i < screens.length; i++) if (screens[i].name === screenName) return Math.max(0.7, Math.min(1.6, Math.min(screens[i].width, screens[i].height) / 1080));
+        return 1;
+    }
     function kindFor(dir) {
         if (dir === "deny") return "deny";
-        if (dir === "hint") return "glow";
-        var own = dir === "out" ? cfg.effectOut : cfg.effectIn;
-        return own || cfg.effect || "glow";
+        var own = dir === "out" ? cfg.effectOut : (dir === "in" ? cfg.effectIn : "");
+        var eff = own || (dir === "hint" ? "glow" : (cfg.effect || "auto"));
+        return eff === "auto" ? autoKind(dir) : eff;
     }
     // o: { dir: out | in | deny | hint, side, pos, screen, peer?, soft? }; soft — тише обычного (подсказка, появление соседа)
     function show(o) {
         if (o.dir === "in" && o.peer !== undefined) coolUntil = Date.now() + 700;
-        if ((cfg.effect || "glow") === "none" && !cfg.effectOut && !cfg.effectIn && o.dir !== "deny") return;
+        if (cfg.effect === "none" && !cfg.effectOut && !cfg.effectIn && o.dir !== "deny") return;
         if (!scene(o.link ? "link" : o.dir)) return;
         var kind = kindFor(o.dir);
         if (kind === "none") return;
         fxN++;
-        fx = fx.concat([Object.assign({ n: fxN, kind: kind, kk: o.dir === "hint" ? 0.45 : (o.soft ? 0.7 : 1) }, o)]);
+        if (o.dir === "out" && !o.link) lastOut = Date.now();
+        fx = fx.concat([Object.assign({ n: fxN, kind: kind, kk: (o.dir === "hint" ? 0.45 : (o.soft ? 0.7 : 1)) * ((cfg.effect || "auto") === "auto" ? sizeK(o.screen) : 1) }, o)]);
     }
     property double hintUntil: 0           // подсказка у края не чаще раза в 1,5 с: курсор у кромки легко дрожит
     function hint(side, pos, screen) {

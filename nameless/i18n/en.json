@@ -1398,5 +1398,6 @@
  "Сосед": "Neighbour",
  "Расставить заново": "Arrange again",
  "Край — там, где у вас стоит соседний компьютер. Новым соседям край назначается сам (справа, слева, сверху, снизу); «Нет» запоминается.": "The edge is where the neighbouring computer stands. New neighbours get an edge automatically (right, left, top, bottom); “None” is remembered.",
- "где курсор ушёл и где пришёл — на обоих компьютерах. Этот выбор — общий; ниже можно задать отдельный эффект для ухода и для прихода": "where the cursor left and where it arrived — on both computers. This choice is common; below you can set a separate effect for leaving and arriving"
+ "где курсор ушёл и где пришёл — на обоих компьютерах. Этот выбор — общий; ниже можно задать отдельный эффект для ухода и для прихода": "where the cursor left and where it arrived — on both computers. This choice is common; below you can set a separate effect for leaving and arriving",
+ "где курсор ушёл и где пришёл — на обоих компьютерах. «Авто» подбирает эффект по случаю: комета при уходе, эхо при приходе, тише на полном экране, при записи и на низком заряде. Этот выбор — общий; ниже можно задать отдельный эффект для ухода и для прихода": "where the cursor left and where it arrived — on both computers. “Auto” picks the effect by situation: a comet when leaving, an echo when arriving, quieter on a fullscreen window, while recording and on low battery. This choice is common; below you can set a separate effect for leaving and arriving"
 }
