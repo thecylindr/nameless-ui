@@ -61,8 +61,24 @@ install_shell() {
     [[ -f /usr/share/applications/org.kde.dolphin.desktop ]] && xdg-mime default org.kde.dolphin.desktop inode/directory 2>/dev/null
 }
 
+# распаковка архива Orbit: «самодостаточная» сборка (внутри AppRun и свои библиотеки) — в ~/.local/opt/nameless-orbit со ссылкой в ~/.local/bin;
+# обычный архив (usr/bin, usr/share…) — прямо в ~/.local
+orbit_unpack() {
+    local ar="$1" dst="$HOME/.local/opt/nameless-orbit"
+    if tar -tzf "$ar" | grep -q '/AppRun$'; then
+        rm -rf "$dst"; mkdir -p "$dst" "$HOME/.local/bin" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/256x256/apps" || return 1
+        tar -xzf "$ar" -C "$dst" --strip-components=1 || return 1
+        ln -sf "$dst/nameless-orbit" "$HOME/.local/bin/nameless-orbit"
+        cp -f "$dst/share/applications/nameless-orbit.desktop" "$HOME/.local/share/applications/" 2>/dev/null
+        cp -f "$dst/share/icons/hicolor/256x256/apps/nameless-orbit.png" "$HOME/.local/share/icons/hicolor/256x256/apps/" 2>/dev/null
+        return 0
+    fi
+    mkdir -p "$HOME/.local" && tar -xzf "$ar" -C "$HOME/.local" --strip-components=1
+}
+
 # готовая сборка собрана на свежем Arch (Qt 6.12, ffmpeg 8): на не обновлённой системе не хватает библиотек — тогда нужна сборка из исходников
 orbit_bin_ok() {
+    [[ -x "$HOME/.local/opt/nameless-orbit/AppRun" ]] && return 0      # самодостаточная сборка: свои библиотеки, система не важна
     local missing; missing="$(ldd "$HOME/.local/bin/nameless-orbit" 2>&1 | grep -E "not found" | sed 's/^[[:space:]]*//' | head -n5)"
     [[ -z "$missing" ]] && return 0
     warn "готовая сборка не подходит этой системе (нет библиотек):"; echo "$missing" | sed 's/^/        /'
@@ -120,7 +136,7 @@ install_orbit() {
                     warn "в релизе нет файла SHA256SUMS — проверить скачанное нечем. Чтобы всё же поставить: ORBIT_INSECURE=1 ./install.sh orbit"
                     rm -rf "$tmp"; FAILED+=("orbit"); return
                 fi
-                if mkdir -p "$HOME/.local" && tar -xzf "$tmp/orbit.tar.gz" -C "$HOME/.local" --strip-components=1; then
+                if orbit_unpack "$tmp/orbit.tar.gz"; then
                     rm -rf "$tmp"
                     if orbit_bin_ok; then
                         say "Orbit установлен в ~/.local (запуск: nameless-orbit). Если команда не находится — добавьте ~/.local/bin в PATH."
