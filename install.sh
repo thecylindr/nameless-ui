@@ -67,6 +67,12 @@ orbit_unpack() {
     local ar="$1" dst="$HOME/.local/opt/nameless-orbit"
     local list; list="$(tar -tzf "$ar" 2>/dev/null)"      # не конвейером в grep -q: при pipefail он закрывает канал раньше tar и условие ложно
     if grep -q '/AppRun$' <<<"$list"; then
+        # остатки прежней неудачной установки (архив был распакован прямо в ~/.local): AppRun, скрипт запуска, qt.conf и библиотеки сборки
+        if [[ -e "$HOME/.local/AppRun" ]]; then
+            local f; while read -r f; do [[ -n "$f" ]] && rm -f "$HOME/.local/lib/$f"; done < <(grep -oE '/lib/[^/]+$' <<<"$list" | sed 's#^/lib/##')
+            rm -rf "$HOME/.local/AppRun" "$HOME/.local/nameless-orbit" "$HOME/.local/bin/qt.conf" "$HOME/.local/lib/qt6" "$HOME/.local/lib/fallback"
+        fi
+        rm -f "$HOME/.local/bin/nameless-orbit"
         rm -rf "$dst"; mkdir -p "$dst" "$HOME/.local/bin" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/256x256/apps" || return 1
         tar -xzf "$ar" -C "$dst" --strip-components=1 || return 1
         ln -sf "$dst/nameless-orbit" "$HOME/.local/bin/nameless-orbit"
