@@ -60,8 +60,23 @@ PanelWindow {
             anchors.centerIn: parent
             spacing: 14
             Text { anchors.horizontalCenter: parent.horizontalCenter; text: "󰟀"; color: Theme.sub; font.family: Theme.iconFont; font.pixelSize: 56 }
-            Text { anchors.horizontalCenter: parent.horizontalCenter; text: Tr.t("NameLess Orbit не запущен"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 13 }
-            GButton { ui: Theme; anchors.horizontalCenter: parent.horizontalCenter; implicitWidth: 150; label: Tr.t("Запустить"); icon: "󰐊"; on: true; onClicked: { OrbitData.launched = false; OrbitData.autoLaunch(); } }
+            Text { anchors.horizontalCenter: parent.horizontalCenter; text: OrbitData.launchState === "starting" ? Tr.t("Запускаем Orbit…") : Tr.t("NameLess Orbit не запущен"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 13 }
+            Text {
+                visible: OrbitData.launchState === "failed"
+                width: 300; anchors.horizontalCenter: parent.horizontalCenter
+                horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap
+                text: OrbitData.launchError; color: Theme.red; font.family: Theme.font; font.pixelSize: 12
+            }
+            GButton {
+                ui: Theme; anchors.horizontalCenter: parent.horizontalCenter; implicitWidth: 170
+                enabled: OrbitData.launchState !== "starting"
+                label: OrbitData.launchState === "starting" ? Tr.t("Запуск…") : (OrbitData.launchFix === "restart" ? Tr.t("Перезапустить") : (OrbitData.launchFix === "window" ? Tr.t("Открыть окно") : Tr.t("Запустить")))
+                icon: OrbitData.launchFix === "restart" ? "󰑓" : "󰐊"; on: true
+                onClicked: {
+                    if (OrbitData.launchFix === "window") OrbitData.launch();
+                    else OrbitData.start(OrbitData.launchFix === "restart");
+                }
+            }
         }
 
         Flickable {

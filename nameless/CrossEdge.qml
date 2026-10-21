@@ -11,7 +11,7 @@ import Quickshell.Hyprland
 //         слой без ввода и исчезает сам. Работает и на компьютере, куда курсор пришёл
 //   Scroll Lock — вернуть курсор домой. Настройки — «Оформление» → «Курсор» (через ipc crossing)
 Scope {
-    id: x
+    id: cross
     readonly property var cfg: Config.store.crossing || ({})
     readonly property bool on: cfg.enabled === true && OrbitData.enabled && OrbitData.running
     // края, за которыми сейчас есть сосед на связи с поддержкой перехода
@@ -41,12 +41,12 @@ Scope {
     // ---------- края ----------
     property double coolUntil: 0           // курсор только что вернулся — край не срабатывает сразу снова
     Variants {
-        model: x.links
+        model: cross.links
         PanelWindow {
             id: strip
             required property var modelData
             readonly property string side: modelData.side
-            screen: x.screenFor(side)
+            screen: cross.screenFor(side)
             anchors { left: side !== "right"; right: side !== "left"; top: side !== "bottom"; bottom: side !== "top" }
             implicitWidth: 1
             implicitHeight: 1
@@ -62,13 +62,13 @@ Scope {
                 acceptedButtons: Qt.NoButton
                 property real p: 0.5
                 onPositionChanged: (m) => p = strip.side === "left" || strip.side === "right" ? m.y / Math.max(1, height) : m.x / Math.max(1, width)
-                onEntered: if (Date.now() > x.coolUntil) dwell.restart()
+                onEntered: if (Date.now() > cross.coolUntil) dwell.restart()
                 onExited: dwell.stop()
             }
             // задержка: случайное касание края (полоса прокрутки, угол экрана) не уводит курсор
             Timer {
                 id: dwell
-                interval: Math.max(0, x.cfg.delay === undefined ? 120 : x.cfg.delay)
+                interval: Math.max(0, cross.cfg.delay === undefined ? 120 : cross.cfg.delay)
                 onTriggered: OrbitData.crossTo(strip.modelData.device, strip.side, edge.p, strip.screen ? strip.screen.name : "")
             }
         }
@@ -90,13 +90,13 @@ Scope {
         show({ dir: "out", side: "right", pos: 0.5, screen: f });
         later.restart();
     }
-    Timer { id: later; interval: 380; onTriggered: { var f = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""; x.show({ dir: "in", side: "left", pos: 0.5, screen: f }); } }
+    Timer { id: later; interval: 380; onTriggered: { var f = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""; cross.show({ dir: "in", side: "left", pos: 0.5, screen: f }); } }
 
     Variants {
-        model: x.fx
+        model: cross.fx
         PanelWindow {
             required property var modelData
-            screen: { for (var i = 0; i < x.screens.length; i++) if (x.screens[i].name === modelData.screen) return x.screens[i]; return x.screenFor(modelData.side); }
+            screen: { for (var i = 0; i < cross.screens.length; i++) if (cross.screens[i].name === modelData.screen) return cross.screens[i]; return cross.screenFor(modelData.side); }
             anchors { top: true; bottom: true; left: true; right: true }
             exclusionMode: ExclusionMode.Ignore
             color: "transparent"
@@ -106,27 +106,27 @@ Scope {
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             CrossFx {
                 anchors.fill: parent
-                kind: x.cfg.effect || "glow"
+                kind: cross.cfg.effect || "glow"
                 side: modelData.side
                 pos: modelData.pos
                 dir: modelData.dir
-                tint: x.tintOf(x.cfg.color || "accent")
-                duration: x.cfg.duration || 700
-                k: x.cfg.intensity || 1
-                onFinished: x.done(modelData.n)
+                tint: cross.tintOf(cross.cfg.color || "accent")
+                duration: cross.cfg.duration || 700
+                k: cross.cfg.intensity || 1
+                onFinished: cross.done(modelData.n)
             }
         }
     }
 
     // сигнал Orbit: dbus-monitor печатает строковый аргумент отдельной строкой «string "{…}"»
     Process {
-        running: x.cfg.enabled === true && OrbitData.enabled && OrbitData.running
+        running: cross.cfg.enabled === true && OrbitData.enabled && OrbitData.running
         command: ["dbus-monitor", "--session", "type='signal',interface='" + OrbitData.svc + "',member='Crossing'"]
         stdout: SplitParser {
             onRead: line => {
                 var i = line.indexOf("string \"");
                 if (i < 0) return;
-                try { x.show(JSON.parse(line.slice(i + 8, line.lastIndexOf("\"")))); } catch (e) { }
+                try { cross.show(JSON.parse(line.slice(i + 8, line.lastIndexOf("\"")))); } catch (e) { }
             }
         }
     }

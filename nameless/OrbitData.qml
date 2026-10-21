@@ -97,13 +97,54 @@ Singleton {
     function ring(id) { call("Ring", "s", id); }
     function sendClipboard(id) { call("SendClipboard", "s", id); }
     function show() { if (running) call("Show", "", ""); else Quickshell.execDetached(["nameless-orbit"]); }
-    // Orbit не запущен, а он нужен — поднимаем без окна; пока файла нет (не собран), команда молча ничего не делает
+    // Orbit не запущен, а он нужен — поднимаем без окна
     function autoLaunch() {
         if (launched || !autostart || !need) return;
         launched = true;
-        Quickshell.execDetached(["sh", "-c", "command -v nameless-orbit >/dev/null && exec nameless-orbit --background"]);
-        later.interval = 2500; later.restart();
+        start(false);
     }
+    // ---------- запуск с понятным итогом (кнопка «Запустить») ----------
+    // launchState: "" — нет запуска, starting — ждём ответа на шине, failed — не вышло (launchError — почему, launchFix — что можно сделать)
+    property string launchState: ""
+    property string launchError: ""
+    property string launchFix: ""          // restart — Orbit работает, но не отвечает; window — открыть окно Orbit
+    property int launchWaited: 0
+    // 127 — программы нет; 3 — уже работает, но не на шине (раньше «Запустить» молча натыкалась на этот экземпляр); 0 — запущен
+    // [/]bin — шаблон pgrep не совпадает с командной строкой самого sh
+    Process {
+        id: starter
+        property bool restart: false
+        command: ["sh", "-c", (restart ? "pkill -f '[/]bin/nameless-orbit'; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -f '[/]bin/nameless-orbit' >/dev/null || break; sleep 0.3; done; "
+                                       : "pgrep -f '[/]bin/nameless-orbit' >/dev/null && exit 3; ")
+                             + "command -v nameless-orbit >/dev/null 2>&1 || exit 127; setsid -f nameless-orbit --background >/dev/null 2>&1; exit 0"]
+        onExited: code => {
+            if (code === 127) { d.launchState = "failed"; d.launchError = Tr.t("nameless-orbit не найден: Orbit не установлен (~/.local/bin/nameless-orbit)"); d.launchFix = ""; return; }
+            if (code === 3) { d.launchState = "failed"; d.launchError = Tr.t("Orbit работает, но не отвечает NameLess UI (шина D-Bus)"); d.launchFix = "restart"; return; }
+            d.launchWaited = 0; waitT.restart();
+        }
+    }
+    function start(restart) {
+        if (starter.running) return;
+        launchState = "starting"; launchError = ""; launchFix = "";
+        starter.restart = restart === true;
+        starter.running = true;
+    }
+    // ждём регистрации на шине до 10 секунд, спрашивая раз в секунду
+    Timer {
+        id: waitT
+        interval: 1000; repeat: true
+        onTriggered: {
+            if (d.running) { stop(); d.launchState = ""; return; }
+            d.refresh();
+            if (++d.launchWaited >= 10) {
+                stop();
+                d.launchState = "failed";
+                d.launchError = Tr.t("Orbit не ответил за 10 секунд: откройте окно — в нём будет видна ошибка");
+                d.launchFix = "window";
+            }
+        }
+    }
+    onRunningChanged: if (running) { launchState = ""; waitT.stop(); }
     // уведомление на подключённые устройства (пустой deviceId — на все)
     // сообщение об ответе Claude: Orbit сам решает, отправлять ли его (настройка «Сообщения об ответе Claude»)
     function notifyReply(title, body) { call("NotifyReply", "ss", [title, body]); }
@@ -139,7 +180,7 @@ Singleton {
     function accept(id) { patchReq(id, { localAccepted: true }); call("AcceptPairing", "s", id); }
     function reject(id) { reqs = reqs.filter(function (r) { return r.deviceId !== id; }); call("RejectPairing", "s", id); }
     function connectAddress(host, port) { call("ConnectAddress", "si", [host, String(port)]); }
-    function launch() { Quickshell.execDetached(["nameless-orbit"]); later.interval = 2500; later.restart(); }
+    function launch() { Quickshell.execDetached(["nameless-orbit"]); later.interval = 2500; later.restart(); }     // с окном
 
     function kindIcon(k) { return ({ phone: "󰏲", tablet: "󰓷", laptop: "󰌢", server: "󰒋" })[k] || "󰟀"; }
 }
