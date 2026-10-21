@@ -153,6 +153,7 @@ ShellRoot {
     Osd {}
     EdgeSwipe { shell: root }
     Widgets { shell: root }
+    CrossEdge { id: crossEdge }
     Dock { shell: root }
     OrbitDock { shell: root }
     Lock { id: lock }
@@ -195,6 +196,13 @@ ShellRoot {
         function power(): void { OrbitData.toggleEnabled(); }      // включить / выключить Orbit целиком
         function enable(): void { OrbitData.setEnabled(true); }
         function disable(): void { OrbitData.setEnabled(false); }
+    }
+    // настройки перехода курсора — из шторки «Оформление» (вкладка «Курсор»): значение приходит JSON-строкой
+    IpcHandler {
+        target: "crossing"
+        function set(key: string, value: string): void { try { Config.set("crossing." + key, JSON.parse(value)); } catch (e) { } }
+        function preview(): void { crossEdge.preview(); }
+        function stop(): void { OrbitData.crossStop(); }
     }
     IpcHandler {
         target: "agents"

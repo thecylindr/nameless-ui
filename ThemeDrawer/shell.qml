@@ -28,6 +28,46 @@ ShellRoot {
     onProgressChanged: if (!open && progress < 0.04) armed = false
 
     property int tab: 0
+    onTabChanged: if (tab === 3 && !crossDevs.running) crossDevs.running = true
+
+    // ---------- переход курсора (NameLess UI + Orbit): читается из nameless.json, пишется через ipc NameLess — один писатель у файла ----------
+    property var cross: ({})
+    FileView {
+        path: Quickshell.env("HOME") + "/.config/glassrice/nameless.json"
+        blockLoading: true
+        printErrors: false
+        watchChanges: true
+        onFileChanged: reload()
+        onLoaded: { try { root.cross = JSON.parse(text()).crossing || {}; } catch (e) { } }
+    }
+    function crossSet(key, value) {
+        var n = Object.assign({}, cross); n[key] = value; cross = n;         // шторка показывает новое значение сразу, файл догонит
+        Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "set", key, JSON.stringify(value)]);
+    }
+    function crossSide(dev, name, side) {
+        var l = (cross.links || []).filter(function (x) { return x.device !== dev; });
+        // одна сторона — один сосед: тот, кто стоял на этом краю, снимается
+        if (side !== "off") l = l.filter(function (x) { return x.side !== side; }).concat([{ device: dev, name: name, side: side }]);
+        crossSet("links", l);
+    }
+    function sideOf(dev) { var l = cross.links || []; for (var i = 0; i < l.length; i++) if (l[i].device === dev) return l[i].side; return "off"; }
+    // соседи из Orbit: подключённые, у которых есть переход курсора
+    property var crossPeers: []
+    property bool orbitUp: false
+    Process {
+        id: crossDevs
+        command: ["busctl", "--user", "--json=short", "--", "call", "org.glassrice.NamelessOrbit", "/org/glassrice/NamelessOrbit", "org.glassrice.NamelessOrbit", "Status"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try {
+                    var r = JSON.parse(JSON.parse(text).data[0]);
+                    root.orbitUp = true;
+                    root.crossPeers = (r.connected || []).map(function (c) { return { id: c.deviceId, name: c.name, kind: c.kind, ok: (c.remoteCapabilities || []).indexOf("crossing") >= 0 }; });
+                } catch (e) { root.orbitUp = false; root.crossPeers = []; }
+            }
+        }
+        onExited: code => { if (code !== 0) { root.orbitUp = false; root.crossPeers = []; } }
+    }
 
     // ---------- вид шторки: ширина, высота, карточек в ряд — запоминаются ----------
     property var view: ({ style: "desktop", align: "right", wmode: "normal", height: 0, cols: 2 })
@@ -345,7 +385,7 @@ ShellRoot {
             focus: root.open
             Keys.onEscapePressed: root.hide()
             Keys.onPressed: (e) => {
-                if (e.key === Qt.Key_Tab) { root.tab = (root.tab + 1) % 3; e.accepted = true; }
+                if (e.key === Qt.Key_Tab) { root.tab = (root.tab + 1) % 4; e.accepted = true; }
             }
         }
 
@@ -490,7 +530,7 @@ ShellRoot {
                     ui: look
                     anchors.top: viewBox.bottom
                     anchors.topMargin: 12
-                    options: [{ v: "0", t: Tr.t("Темы"), icon: "󰏘" }, { v: "1", t: Tr.t("Окна"), icon: "󰖲" }, { v: "2", t: Tr.t("Система"), icon: "󰒓" }]
+                    options: [{ v: "0", t: Tr.t("Темы"), icon: "󰏘" }, { v: "1", t: Tr.t("Окна"), icon: "󰖲" }, { v: "2", t: Tr.t("Система"), icon: "󰒓" }, { v: "3", t: Tr.t("Курсор"), icon: "󰆿" }]
                     value: String(root.tab)
                     onPicked: (v) => root.tab = Number(v)
                 }
@@ -500,11 +540,12 @@ ShellRoot {
                     id: pages
                     anchors { top: tabBar.bottom; topMargin: 16; left: parent.left; right: parent.right; bottom: parent.bottom }
                     clip: true
-                    readonly property real currentHeight: [pageThemes, pageWindows, pageSystem][root.tab].implicitHeight + 12
+                    readonly property real currentHeight: [pageThemes, pageWindows, pageSystem, pageCursor][root.tab].implicitHeight + 12
 
                     Page { index: 0; tab: root.tab; body: pageThemes }
                     Page { index: 1; tab: root.tab; body: pageWindows }
                     Page { index: 2; tab: root.tab; body: pageSystem }
+                    Page { index: 3; tab: root.tab; body: pageCursor }
                 }
             }
 
@@ -1117,6 +1158,105 @@ ShellRoot {
                     colors: ["#5e5ce6", "#bf5af2", "#ff375f", "#ff9f0a", "#30d158", "#64d2ff", "#b7bdf8", "#94e2d5"]
                     onPicked: (v) => root.set(".accent2", v)
                 }
+            }
+        }
+
+        // ================= Курсор: переход между компьютерами =================
+        Grid {
+            id: pageCursor
+            visible: false
+            width: panel.width - 52
+            columns: panel.pageCols
+            columnSpacing: 18
+            rowSpacing: 18
+
+            GSection {
+                ui: look; title: Tr.t("Переход курсора")
+                GSwitch {
+                    ui: look; label: Tr.t("Курсор переходит на соседний компьютер")
+                    sub: Tr.t("упёрся в край — мышь и клавиатура управляют компьютером за этим краем (NameLess Orbit). Обратно — тем же краем или Scroll Lock")
+                    checked: root.cross.enabled === true
+                    onToggled: (v) => root.crossSet("enabled", v)
+                }
+                Text {
+                    width: parent.width; wrapMode: Text.WordWrap
+                    text: !root.orbitUp ? Tr.t("Orbit не запущен: соседи появятся, когда он будет на связи") : (root.crossPeers.length === 0 ? Tr.t("Нет подключённых компьютеров. На соседнем должен быть свежий Orbit и разрешена «Демонстрация экрана» для этого компьютера") : Tr.t("Где стоит каждый сосед относительно этого экрана:"))
+                    color: look.sub; font.family: look.font; font.pixelSize: 12
+                }
+                Repeater {
+                    model: root.crossPeers
+                    Column {
+                        required property var modelData
+                        width: parent.width
+                        spacing: 6
+                        Text { text: modelData.name + (modelData.ok ? "" : Tr.t(" — нет перехода курсора (старый Orbit или не Hyprland)")); color: modelData.ok ? look.text : look.sub; font.family: look.font; font.pixelSize: 13 }
+                        GSegment {
+                            ui: look
+                            visible: modelData.ok
+                            options: [{ v: "off", t: Tr.t("Нет") }, { v: "left", t: Tr.t("Слева"), icon: "󰁍" }, { v: "right", t: Tr.t("Справа"), icon: "󰁔" }, { v: "top", t: Tr.t("Сверху"), icon: "󰁝" }, { v: "bottom", t: Tr.t("Снизу"), icon: "󰁅" }]
+                            value: root.sideOf(modelData.id)
+                            onPicked: (v) => root.crossSide(modelData.id, modelData.name, v)
+                        }
+                    }
+                }
+                GButton { ui: look; height: 34; icon: "󰑐"; label: Tr.t("Обновить список"); onClicked: if (!crossDevs.running) crossDevs.running = true }
+            }
+
+            GSection {
+                ui: look; title: Tr.t("Эффект на краях")
+                Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("где курсор ушёл и где пришёл — на обоих компьютерах"); color: look.sub; font.family: look.font; font.pixelSize: 12 }
+                Flow {
+                    width: parent.width
+                    spacing: 8
+                    Repeater {
+                        model: [{ v: "glow", t: Tr.t("Свечение"), i: "󰛨" }, { v: "ripple", t: Tr.t("Волна"), i: "󰖟" }, { v: "sparks", t: Tr.t("Искры"), i: "󰸞" },
+                                { v: "line", t: Tr.t("Линия"), i: "󰕞" }, { v: "portal", t: Tr.t("Портал"), i: "󰕰" }, { v: "none", t: Tr.t("Без эффекта"), i: "󰜺" }]
+                        GTile {
+                            required property var modelData
+                            ui: look
+                            width: 104; height: 70
+                            on: (root.cross.effect || "glow") === modelData.v
+                            onClicked: { root.crossSet("effect", modelData.v); if (modelData.v !== "none") prevT.restart(); }
+                            Column {
+                                anchors.centerIn: parent
+                                spacing: 4
+                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.i; color: look.text; font.family: look.iconFont; font.pixelSize: 20 }
+                                Text { anchors.horizontalCenter: parent.horizontalCenter; text: modelData.t; color: look.text; font.family: look.font; font.pixelSize: 11 }
+                            }
+                        }
+                    }
+                }
+                // показ после выбора: ipc доходит до NameLess раньше, чем он применит значение, поэтому — с задержкой
+                Timer { id: prevT; interval: 350; onTriggered: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "preview"]) }
+                Text { text: Tr.t("Цвет"); color: look.text; font.family: look.font; font.pixelSize: 13 }
+                GSegment {
+                    ui: look
+                    options: [{ v: "accent", t: Tr.t("Акцент") }, { v: "accent2", t: Tr.t("Второй акцент") }, { v: "white", t: Tr.t("Белый") }]
+                    value: root.cross.color || "accent"
+                    onPicked: (v) => { root.crossSet("color", v); prevT.restart(); }
+                }
+                PillSlider {
+                    ui: look; width: parent.width
+                    icon: "󰔛"; label: Tr.t("Длительность")
+                    from: 300; to: 1600; stepSize: 50; decimals: 0; suffix: Tr.t(" мс")
+                    value: root.cross.duration || 700
+                    onCommitted: (v) => { root.crossSet("duration", Math.round(v)); prevT.restart(); }
+                }
+                PillSlider {
+                    ui: look; width: parent.width
+                    icon: "󰃠"; label: Tr.t("Сила")
+                    from: 0.5; to: 2; stepSize: 0.1; decimals: 1
+                    value: root.cross.intensity || 1
+                    onCommitted: (v) => { root.crossSet("intensity", v); prevT.restart(); }
+                }
+                PillSlider {
+                    ui: look; width: parent.width
+                    icon: "󰥔"; label: Tr.t("Задержка на краю")
+                    from: 0; to: 500; stepSize: 10; decimals: 0; suffix: Tr.t(" мс")
+                    value: root.cross.delay === undefined ? 120 : root.cross.delay
+                    onCommitted: (v) => root.crossSet("delay", Math.round(v))
+                }
+                GButton { ui: look; height: 34; icon: "󰐊"; label: Tr.t("Показать эффект"); onClicked: prevT.restart() }
             }
         }
 

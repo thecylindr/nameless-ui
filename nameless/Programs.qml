@@ -24,7 +24,24 @@ PanelWindow {
     WlrLayershell.keyboardFocus: open ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
     function toggle() { open = !open; }
-    onOpenChanged: if (open) { if (script === "") locate.running = true; else { reload(); loadTab(); if (!updProc.running) updProc.running = true; } query.forceActiveFocus(); }
+    // открытие: сначала анимация, тяжёлые запросы — после неё (раньше pkg.sh, checkupdates и пересборка списка шли посреди выезда окна)
+    onOpenChanged: if (open) { query.forceActiveFocus(); openT.restart(); }
+    Timer {
+        id: openT
+        interval: Theme.dur(true) + 60
+        onTriggered: {
+            if (!w.open) return;
+            if (w.script === "") { locate.running = true; return; }
+            // список свежий (меньше 90 с) — не перечитывается; после установки и удаления его обновляет term.onExited
+            if (Date.now() - w.listAt > 90000) w.reload();
+            w.loadTab();
+            // ожидающие обновления: сеть и checkupdates — не чаще раза в 10 минут
+            if (!updProc.running && Date.now() - w.updAt > 600000) { w.updAt = Date.now(); updProc.running = true; }
+        }
+    }
+    property double listAt: 0             // когда последний раз пришёл список пакетов
+    property double updAt: 0              // когда последний раз проверялись обновления
+    property string listText: ""          // прошлый ответ pkg.sh list: тот же текст — модель не пересобирается
 
     // ---------- данные ----------
     property string script: ""
@@ -67,7 +84,9 @@ PanelWindow {
         stdout: StdioCollector {
             onStreamFinished: {
                 w.loading = false;
-                try { w.pk = JSON.parse(text); } catch (e) { w.note = Tr.t("Не удалось прочитать список пакетов"); }
+                w.listAt = Date.now();
+                if (text === w.listText) return;
+                try { w.pk = JSON.parse(text); w.listText = text; } catch (e) { w.note = Tr.t("Не удалось прочитать список пакетов"); }
             }
         }
     }
@@ -178,6 +197,7 @@ PanelWindow {
                         if (w.rgb.saved.effect) w.rgbEffect = w.rgb.saved.effect;
                         if (w.rgb.saved.speed) w.rgbSpeed = w.rgb.saved.speed;
                         if (w.rgb.saved.color) w.rgbColor = w.rgb.saved.color;
+                        w.rgbFollow = w.rgb.saved.follow === true;
                     }
                     w.rgbLoaded = true;
                 } catch (e) { }
@@ -190,6 +210,13 @@ PanelWindow {
     property string rgbEffect: "static"
     property int rgbSpeed: 5
     property string rgbColor: "ffffff"
+    property bool rgbFollow: false        // подсветка следует акценту темы (theme.sh → rgb.sh theme); выкл — автономно, своим цветом
+    readonly property string accentHex: String(Theme.accent).replace("#", "").slice(-6)
+    function setFollow(on) {
+        rgbFollow = on;
+        rgbRun([rgbScript, "follow", on ? "on" : "off", accentHex]);
+        if (on) { rgbColor = accentHex; rgbNote = Tr.t("Подсветка следует цвету темы"); }
+    }
     property var rgbPending: null
     Process {
         id: rgbSet
@@ -203,6 +230,8 @@ PanelWindow {
     }
     function rgbRun(cmd) { if (rgbSet.running) rgbPending = cmd; else { rgbSet.command = cmd; rgbSet.running = true; } }
     function setRgb(hex, pct) {
+        // свой цвет выбран вручную — подсветка переходит в автономный режим (иначе следующая смена темы его перезапишет)
+        if (rgbFollow && hex !== rgbColor) { rgbFollow = false; rgbRun(["sh", "-c", "\"$0\" follow off >/dev/null; exec \"$0\" set \"$1\" \"$2\"", rgbScript, hex, String(Math.round(pct))]); rgbColor = hex; rgbBright = Math.round(pct); return; }
         rgbColor = hex; rgbBright = Math.round(pct);
         if (rgbEffect === "static") rgbRun([rgbScript, "set", hex, String(rgbBright)]);
         else applyEffect();
@@ -250,6 +279,18 @@ PanelWindow {
 
     // ---------- список раздела ----------
     readonly property var catalog: pk.categories || []
+    // имя пункта: у набора и списка («@sets/web») — название из описания до « — », у пакета — сам ключ
+    function nameOf(x) { return x.key.charAt(0) === "@" && (x.desc || "").indexOf(" — ") > 0 ? x.desc.split(" — ")[0] : x.key; }
+    function aboutOf(x) { return x.key.charAt(0) === "@" && (x.desc || "").indexOf(" — ") > 0 ? x.desc.slice(x.desc.indexOf(" — ") + 3) : (x.desc || ""); }
+    // откуда ставится: «pacman · extra», «AUR», смешанно — «extra + AUR». repos — из pkg.sh list, repo — из поиска
+    function srcOf(x) {
+        var r = x.repos || (x.repo ? [x.repo] : (x.aur ? ["aur"] : []));
+        if (r.length === 0) return { t: "", c: Theme.sub };
+        var aur = r.indexOf("aur") >= 0, off = r.filter(function (v) { return v !== "aur"; });
+        if (aur && off.length === 0) return { t: "AUR", c: Theme.peach };
+        if (!aur) return { t: "pacman · " + off.join(", "), c: Theme.teal };
+        return { t: off.join(", ") + " + AUR", c: Theme.yellow };
+    }
     function catTitle(id) {
         for (var i = 0; i < catalog.length; i++) if (catalog[i].id === id) return catalog[i].title;
         return id === "other" ? Tr.t("Остальные в системе") : (id === "search" ? Tr.t("Поиск") : id);
@@ -698,6 +739,14 @@ PanelWindow {
                         color: Theme.yellow; font.family: Theme.iconFont; font.pixelSize: 11
                     }
                 }
+                // источник цвета: тема или свой
+                GSwitch {
+                    ui: Theme; width: parent.width
+                    label: Tr.t("Цвет темы")
+                    sub: w.rgbFollow ? Tr.t("подсветка меняет цвет вместе с темой и обоями (статичный и «дыхание»)") : Tr.t("автономно: свой цвет и эффект, тема на подсветку не влияет")
+                    checked: w.rgbFollow
+                    onToggled: (v) => w.setFollow(v)
+                }
                 // эффект
                 Text { text: Tr.t("Эффект"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.7 }
                 GSegment {
@@ -979,7 +1028,7 @@ PanelWindow {
                         NavRow {
                             required property var modelData
                             sid: modelData.id
-                            icon: modelData.id === "mine" ? "󰋑" : "󰉋"
+                            icon: ({ mine: "󰋑", sets: "󰏗", images: "󰋩", archives: "󰀼" })[modelData.id] || "󰉋"
                             label: modelData.title
                             n: modelData.items.length
                             done: w.count(modelData.items, "installed")
@@ -1163,9 +1212,8 @@ PanelWindow {
                         y: w.compact ? 12 : 12
                         Row {
                             spacing: 8
-                            Text { text: row.x0.key; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
-                            Badge { visible: row.x0.aur === true || row.x0.repo === "aur"; text: "AUR"; tint: Theme.peach }
-                            Badge { visible: row.x0.repo !== undefined && row.x0.repo !== "aur"; text: row.x0.repo || ""; tint: Theme.teal }
+                            Text { text: w.nameOf(row.x0); color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                            Badge { readonly property var src: w.srcOf(row.x0); visible: src.t !== ""; text: src.t; tint: src.c }
                             Badge { visible: row.x0.def === true && !row.inst; text: Tr.t("рекомендуется"); tint: Theme.accent2 }
                             Badge { visible: row.x0.state === "partial"; text: Tr.t("частично"); tint: Theme.yellow }
                             Badge { visible: w.section === "all"; text: w.catTitle(row.x0.cat); tint: Theme.sub }
@@ -1173,7 +1221,7 @@ PanelWindow {
                         Text {
                             width: parent.width
                             visible: !w.compact
-                            text: row.x0.desc || ""
+                            text: w.aboutOf(row.x0)
                             elide: Text.ElideRight
                             color: Theme.sub; font.family: Theme.font; font.pixelSize: 12
                         }
@@ -1269,12 +1317,12 @@ PanelWindow {
                     Text {
                         anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 72 }
                         width: parent.width - 24; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight
-                        text: card.x0.key; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                        text: w.nameOf(card.x0); color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
                     }
                     Text {
                         anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 92 }
                         width: parent.width - 24; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight
-                        text: card.inst ? (card.x0.size || card.x0.ver || Tr.t("установлено")) : (card.x0.aur || card.x0.repo === "aur" ? "AUR" : (card.x0.repo || Tr.t("не установлено")))
+                        text: card.inst ? (card.x0.size || card.x0.ver || Tr.t("установлено")) + " · " + w.srcOf(card.x0).t : (w.srcOf(card.x0).t || Tr.t("не установлено"))
                         color: Theme.sub; font.family: Theme.font; font.pixelSize: 11
                     }
                     GButton {

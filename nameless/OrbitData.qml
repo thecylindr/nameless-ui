@@ -4,7 +4,8 @@ import Quickshell
 import Quickshell.Io
 
 // Состояние NameLess Orbit для виджета «Устройства»: читается по D-Bus (org.glassrice.NamelessOrbit, метод Status → JSON)
-// через busctl. Опрос идёт только пока виджет включён и рабочий стол виден; Orbit не запущен — running=false, виджет предлагает запуск.
+// через busctl. Обновление — по сигналу Changed (dbus-monitor) и редким опросом на всякий случай; пока идёт сопряжение — опрос чаще.
+// Опрос идёт только пока виджет включён и рабочий стол виден; Orbit не запущен — running=false, виджет предлагает запуск.
 // Команды (поиск, подключение, сопряжение, «найти», буфер) — вызовы тех же методов D-Bus.
 // Нужен Orbit в фоне — запускается сам (`nameless-orbit --background`, без окна), если не запущен и autostart не выключен
 Singleton {
@@ -27,14 +28,20 @@ Singleton {
     property string name: ""
     property var connected: []            // подключённые: deviceId, name, kind, address, battery (-1 нет), charging
     property var nearby: []               // найденные и сопряжённые, в том числе не на связи
-    property var reqs: []                 // запросы на сопряжение: deviceId, name, kind, code, outgoing
+    property var reqs: []                 // запросы на сопряжение: deviceId, name, kind, code, outgoing, localAccepted, remoteAccepted, secondsLeft
     readonly property int requests: reqs.length
+    property double reqsAt: 0             // когда пришёл список запросов: от него отсчитывается secondsLeft
+    property double now: Date.now()       // тикает раз в секунду, пока есть запросы (обратный отсчёт)
+    Timer { interval: 1000; repeat: true; running: d.reqs.length > 0; onTriggered: d.now = Date.now() }
+    function secondsLeft(r) { return Math.max(0, Math.round((r.secondsLeft || 0) - (d.now - d.reqsAt) / 1000)); }
+    function reqFor(id) { for (var i = 0; i < reqs.length; i++) if (reqs[i].deviceId === id) return reqs[i]; return null; }
 
-    // подключённые первыми, затем остальные из «рядом»
+    // подключённые первыми, затем остальные из «рядом»; устройство, с которым идёт сопряжение, помечено pairing
     readonly property var devices: {
-        var ids = {}, out = [];
-        connected.forEach(function (c) { ids[c.deviceId] = true; out.push(Object.assign({}, c, { online: true })); });
-        nearby.forEach(function (n) { if (!ids[n.deviceId]) out.push(Object.assign({}, n, { online: false, battery: -1, charging: false })); });
+        var ids = {}, out = [], pend = {};
+        reqs.forEach(function (r) { pend[r.deviceId] = true; });
+        connected.forEach(function (c) { ids[c.deviceId] = true; out.push(Object.assign({}, c, { online: true, pairing: false })); });
+        nearby.forEach(function (n) { if (!ids[n.deviceId]) out.push(Object.assign({}, n, { online: false, battery: -1, charging: false, pairing: pend[n.deviceId] === true })); });
         return out;
     }
 
@@ -51,14 +58,28 @@ Singleton {
                     d.connected = r.connected || [];
                     d.nearby = r.nearby || [];
                     d.reqs = r.pairingRequests || [];
+                    d.reqsAt = Date.now(); d.now = d.reqsAt;
                 } catch (e) { d.running = false; d.connected = []; d.nearby = []; d.reqs = []; }
             }
         }
         onExited: code => { if (code !== 0) { d.running = false; d.loaded = true; d.connected = []; d.nearby = []; d.reqs = []; d.autoLaunch(); } }
     }
-    function refresh() { if (!sProc.running) sProc.running = true; }
-    Timer { interval: 5000; repeat: true; running: d.need && !Compositor.covered; triggeredOnStart: true; onTriggered: d.refresh() }
+    // ответ пришёл, пока шёл прошлый запрос, — перечитать сразу после него, а не ждать следующего опроса
+    property bool again: false
+    function refresh() { if (!sProc.running) sProc.running = true; else again = true; }
+    Connections { target: sProc; function onRunningChanged() { if (!sProc.running && d.again) { d.again = false; d.refresh(); } } }
+    // страховочный опрос: сигнал Changed может потеряться (Orbit перезапущен); во время сопряжения — раз в секунду
+    Timer { interval: d.reqs.length > 0 || d.panelOpen ? 1500 : 5000; repeat: true; running: d.need && !Compositor.covered; triggeredOnStart: true; onTriggered: d.refresh() }
     onNeedChanged: if (need) refresh()
+
+    // сигнал Changed от Orbit: состояние перечитывается сразу (сопряжение, подключение, заряд) — без него ответ ждал до 5 секунд
+    Process {
+        id: watch
+        running: d.need && d.running
+        command: ["dbus-monitor", "--session", "type='signal',interface='" + d.svc + "',member='Changed'"]
+        stdout: SplitParser { onRead: line => { if (line.indexOf("member=Changed") >= 0) soon.restart(); } }
+    }
+    Timer { id: soon; interval: 60; onTriggered: d.refresh() }
 
     // ---------- команды ----------
     function call(method, sig, arg) {
@@ -69,7 +90,7 @@ Singleton {
         Quickshell.execDetached(cmd);
         later.restart();
     }
-    Timer { id: later; interval: 700; onTriggered: { d.refresh(); interval = 700; } }
+    Timer { id: later; interval: 300; onTriggered: { d.refresh(); interval = 300; } }
     function scan() { call("Scan", "", ""); }
     function setDiscovery(on) { call("SetDiscovery", "b", on ? "true" : "false"); }
     function connectTo(id) { call("Connect", "s", id); }
@@ -102,6 +123,9 @@ Singleton {
     function viewScreen(deviceId) { call("ViewScreen", "s", deviceId); }       // посмотреть экран устройства (откроется окно Orbit)
     function shareScreen(deviceId) { call("ShareScreen", "s", deviceId); }     // показать этому устройству свой экран
     function secondScreen(deviceId) { call("SecondScreen", "s", deviceId); }  // этот компьютер становится вторым монитором того устройства (где Hyprland или driftwm)
+    // переход курсора на соседний компьютер (край экрана side, место pos 0..1, монитор screen); вернуть — CrossStop или Scroll Lock
+    function crossTo(deviceId, side, pos, screen) { call("CrossTo", "ssds", [deviceId, side, String(pos), screen || ""]); }
+    function crossStop() { call("CrossStop", "", ""); }
     function runCommand(deviceId, commandId) { call("RunCommand", "ss", [deviceId, commandId]); }
     // включить или выключить Orbit целиком; при выключении запущенный Orbit завершается (иначе он продолжит держать порт и сеть)
     function setEnabled(on) {
@@ -110,8 +134,10 @@ Singleton {
         else { launched = false; refresh(); }
     }
     function toggleEnabled() { setEnabled(!enabled); }
-    function accept(id) { call("AcceptPairing", "s", id); }
-    function reject(id) { call("RejectPairing", "s", id); }
+    // ответ на сопряжение: карточка сразу показывает «ждём второе устройство», не дожидаясь ответа Orbit
+    function patchReq(id, fields) { reqs = reqs.map(function (r) { return r.deviceId === id ? Object.assign({}, r, fields) : r; }); }
+    function accept(id) { patchReq(id, { localAccepted: true }); call("AcceptPairing", "s", id); }
+    function reject(id) { reqs = reqs.filter(function (r) { return r.deviceId !== id; }); call("RejectPairing", "s", id); }
     function connectAddress(host, port) { call("ConnectAddress", "si", [host, String(port)]); }
     function launch() { Quickshell.execDetached(["nameless-orbit"]); later.interval = 2500; later.restart(); }
 

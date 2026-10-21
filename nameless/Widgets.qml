@@ -5,7 +5,7 @@ import Quickshell.Hyprland
 
 // Виджеты рабочего стола: слой под окнами во весь экран. Набор, размер (S / M / L) и место — Config.widgets:
 // виджет без сохранённого места стоит в колонке (слева или справа), перетащенный — где оставили.
-//   правый клик по пустому столу — меню: расставить виджеты, добавить, обои, оформление, настройки
+//   правый клик по пустому столу — меню: расставить виджеты, «Добавить виджеты…» (отдельное окно со списком), обои, оформление, настройки
 //   режим правки (shell.widgetsEdit, меню или панель «Рабочий стол»): перетаскивание с привязкой к сетке,
 //   размер, выключить, добавить; Esc или «Готово» — выход. На время правки слой поднимается над окнами
 PanelWindow {
@@ -26,7 +26,7 @@ PanelWindow {
     WlrLayershell.namespace: "nameless-widgets"
     WlrLayershell.layer: edit ? WlrLayer.Overlay : WlrLayer.Bottom
     // клавиатура — только при правке и пока пишется заметка
-    WlrLayershell.keyboardFocus: edit || typing ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: edit || typing || addDlg.visible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
     // клавиатура нужна, пока в каком-то виджете идёт ввод (заметка, город погоды)
     readonly property bool typing: {
         for (var i = 0; i < rep.count; i++) { var s = rep.itemAt(i); if (s && s.wantsKeys) return true; }
@@ -212,6 +212,7 @@ PanelWindow {
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         onClicked: (m) => {
             if (menu.visible) { menu.visible = false; return; }
+            if (addDlg.visible) { addDlg.visible = false; return; }
             if (m.button === Qt.RightButton) menu.show(m.x, m.y);
             else if (w.edit) w.done();
         }
@@ -391,7 +392,7 @@ PanelWindow {
                 value: w.layoutMode
                 onPicked: (v) => Config.set("widgets.layout", v)
             }
-            GButton { ui: Theme; height: 36; icon: "󰐕"; label: Tr.t("Добавить"); onClicked: { var p = mapToItem(null, 0, 0); menu.show(p.x, p.y - menu.height - 8, true); } }
+            GButton { ui: Theme; height: 36; icon: "󰐕"; label: Tr.t("Добавить"); onClicked: addDlg.open() }
             GButton { visible: !w.gridMode; ui: Theme; height: 36; icon: "󰕰"; label: Tr.t("Сбросить места"); onClicked: Config.unplaceWidgets() }
             GButton { ui: Theme; height: 36; icon: "󰒓"; label: Tr.t("Настройки"); onClicked: { w.done(); if (w.shell) w.shell.openDesktop(0); } }
             GButton { ui: Theme; height: 36; icon: "󰄬"; label: Tr.t("Готово"); on: true; onClicked: w.done() }
@@ -400,7 +401,7 @@ PanelWindow {
     // правка с клавиатуры: стрелки — сдвиг выбранного виджета на 8 px (с Shift — на 32), Esc — выход
     Item {
         focus: w.edit
-        Keys.onEscapePressed: { if (menu.visible) menu.visible = false; else w.done(); }
+        Keys.onEscapePressed: { if (menu.visible) menu.visible = false; else if (addDlg.visible) addDlg.visible = false; else w.done(); }
         Keys.onPressed: (e) => {
             var st = w.grid2 ? w.pitch : ((e.modifiers & Qt.ShiftModifier) ? 32 : 8);
             if (e.key === Qt.Key_Left) w.nudge(-st, 0); else if (e.key === Qt.Key_Right) w.nudge(st, 0);
@@ -444,7 +445,11 @@ PanelWindow {
     Timer { id: leaveT; interval: 250; onTriggered: if (!deskHover.hovered) menu.visible = false }
     Connections {
         target: Compositor.hyprland ? Hyprland : null
-        function onRawEvent(e) { if (menu.visible && ["activewindow", "activewindowv2", "workspace", "workspacev2", "openwindow", "focusedmon"].indexOf(e.name) >= 0) menu.visible = false; }
+        function onRawEvent(e) {
+            if (["activewindow", "activewindowv2", "workspace", "workspacev2", "openwindow", "focusedmon"].indexOf(e.name) < 0) return;
+            menu.visible = false;
+            addDlg.visible = false;
+        }
     }
 
     // ---------- меню рабочего стола ----------
@@ -454,18 +459,16 @@ PanelWindow {
         z: 10
         width: 250
         height: mcol.implicitHeight + 16
-        property bool addOnly: false
         property string forType: ""
         readonly property var forItem: forType !== "" ? Config.item(forType) : null
-        function showFor(type, px, py) { forType = type; addOnly = false; place(px, py); }
-        function show(px, py, add) { forType = ""; addOnly = add === true; place(px, py); }
+        function showFor(type, px, py) { forType = type; place(px, py); }
+        function show(px, py) { forType = ""; place(px, py); }
         function place(px, py) {
             x = Math.min(px, w.width - width - 8);
             y = Math.min(py, w.height - height - 8);
             visible = true;
         }
         function run(f) { visible = false; f(); }
-        readonly property var off: w.items.filter(function (x) { return !x.on; })
 
         Rectangle {
             anchors.fill: parent
@@ -501,22 +504,88 @@ PanelWindow {
             MenuRow { visible: menu.forType !== ""; icon: "󰅖"; danger: true; label: Tr.t("Убрать с рабочего стола"); onClicked: { var t = menu.forType; menu.run(function () { Config.setItem(t, "on", false); }); } }
             Rectangle { visible: menu.forType !== ""; width: parent.width; height: 1; color: Theme.fill(0.12) }
             // ----- меню стола -----
-            MenuRow { visible: !menu.addOnly; icon: "󰙵"; label: w.edit ? Tr.t("Закончить правку") : Tr.t("Расставить виджеты"); onClicked: menu.run(function () { if (w.shell) w.shell.widgetsEdit = !w.edit; }) }
-            MenuRow { visible: !menu.addOnly; icon: "󰒓"; label: Tr.t("Виджеты и док…"); onClicked: menu.run(function () { if (w.shell) { w.done(); w.shell.openDesktop(0); } }) }
-            MenuRow { visible: !menu.addOnly; icon: "󰸉"; label: Tr.t("Следующие обои"); onClicked: menu.run(function () { Quickshell.execDetached([Theme.script, "action", "wallpaper-next"]); }) }
-            MenuRow { visible: !menu.addOnly; icon: "󰏘"; label: Tr.t("Оформление"); onClicked: menu.run(function () { Quickshell.execDetached([Theme.script, "action", "drawer"]); }) }
-            Rectangle { visible: !menu.addOnly && menu.off.length > 0; width: parent.width; height: 1; color: Theme.fill(0.12) }
-            Text { visible: menu.off.length > 0 && menu.forType === ""; width: parent.width; leftPadding: 10; topPadding: 6; bottomPadding: 2; text: Tr.t("Добавить виджет"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
-            Repeater {
-                model: menu.forType === "" ? menu.off : []
-                MenuRow {
-                    required property var modelData
-                    icon: (Config.kinds[modelData.type] || {}).icon || ""
-                    label: (Config.kinds[modelData.type] || {}).name || modelData.type
-                    onClicked: { var t = modelData.type; menu.run(function () { Config.setItem(t, "on", true); }); }
+            MenuRow { icon: "󰙵"; label: w.edit ? Tr.t("Закончить правку") : Tr.t("Расставить виджеты"); onClicked: menu.run(function () { if (w.shell) w.shell.widgetsEdit = !w.edit; }) }
+            MenuRow { icon: "󰒓"; label: Tr.t("Виджеты и док…"); onClicked: menu.run(function () { if (w.shell) { w.done(); w.shell.openDesktop(0); } }) }
+            MenuRow { icon: "󰸉"; label: Tr.t("Следующие обои"); onClicked: menu.run(function () { Quickshell.execDetached([Theme.script, "action", "wallpaper-next"]); }) }
+            MenuRow { icon: "󰏘"; label: Tr.t("Оформление"); onClicked: menu.run(function () { Quickshell.execDetached([Theme.script, "action", "drawer"]); }) }
+            Rectangle { width: parent.width; height: 1; color: Theme.fill(0.12) }
+            // список виджетов — не в меню, а во втором окне
+            MenuRow { icon: "󰐕"; label: Tr.t("Добавить виджеты…"); onClicked: menu.run(function () { addDlg.open(); }) }
+        }
+    }
+
+    // ---------- окно «Добавить виджеты» ----------
+    // по центру стола: плитки выключенных виджетов (значок, имя, описание); нажатие ставит виджет на стол,
+    // окно остаётся открытым — можно добавить несколько подряд. Закрытие: крестик, Esc, клик по столу
+    Item {
+        id: addDlg
+        visible: false
+        z: 11
+        width: Math.min(640, w.width - 48)
+        height: Math.min(dcol.implicitHeight + 32, w.height - 160)
+        anchors.centerIn: parent
+        readonly property var off: w.items.filter(function (x) { return !x.on; })
+        function open() { menu.visible = false; visible = true; forceActiveFocus(); }
+        Keys.onEscapePressed: visible = false
+
+        // фон-подложка не нужна: клик мимо окна ловит MouseArea стола и закрывает его
+        Rectangle {
+            anchors.fill: parent
+            radius: Theme.r(22)
+            color: Qt.rgba(Theme.base.r, Theme.base.g, Theme.base.b, 0.97)
+            border.width: 1
+            border.color: Theme.glass ? Qt.rgba(1, 1, 1, 0.16) : Theme.line(0.22)
+        }
+        // поглощает клики внутри окна, чтобы они не закрывали его через стол
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.LeftButton | Qt.RightButton }
+
+        Column {
+            id: dcol
+            x: 16; y: 16
+            width: parent.width - 32
+            spacing: 12
+            Item {
+                width: parent.width; height: 32
+                Text { anchors.verticalCenter: parent.verticalCenter; text: Tr.t("Добавить виджеты"); color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.DemiBold }
+                Chip { anchors { right: parent.right; verticalCenter: parent.verticalCenter } text: "󰅖"; icon: true; onClicked: addDlg.visible = false }
+            }
+            Text { visible: addDlg.off.length === 0; width: parent.width; padding: 10; text: Tr.t("Все виджеты уже на столе"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 13 }
+            Flickable {
+                visible: addDlg.off.length > 0
+                width: parent.width
+                height: Math.min(grid.implicitHeight, w.height - 260)
+                contentHeight: grid.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                Grid {
+                    id: grid
+                    width: parent.width
+                    columns: width > 460 ? 2 : 1
+                    spacing: 8
+                    Repeater {
+                        model: addDlg.off
+                        Rectangle {
+                            id: tile
+                            required property var modelData
+                            readonly property var kind: Config.kinds[modelData.type] || ({ name: modelData.type, icon: "", about: "" })
+                            width: (grid.width - (grid.columns - 1) * grid.spacing) / grid.columns
+                            height: 64
+                            radius: Theme.r(14)
+                            color: tma.containsMouse ? Theme.fill(0.14) : Theme.fill(0.06)
+                            Behavior on color { ColorAnimation { duration: 120 } }
+                            Text { id: tic; x: 14; width: 24; anchors.verticalCenter: parent.verticalCenter; text: tile.kind.icon; color: Theme.accent; font.family: Theme.iconFont; font.pixelSize: 22 }
+                            Column {
+                                anchors { left: tic.right; leftMargin: 10; right: tadd.left; rightMargin: 8; verticalCenter: parent.verticalCenter }
+                                spacing: 2
+                                Text { width: parent.width; text: Tr.t(tile.kind.name); elide: Text.ElideRight; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                                Text { width: parent.width; text: Tr.t(tile.kind.about); elide: Text.ElideRight; maximumLineCount: 2; wrapMode: Text.WordWrap; color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                            }
+                            Text { id: tadd; anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter } text: "󰐕"; color: tma.containsMouse ? Theme.accent : Theme.sub; font.family: Theme.iconFont; font.pixelSize: 18 }
+                            MouseArea { id: tma; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: Config.setItem(tile.modelData.type, "on", true) }
+                        }
+                    }
                 }
             }
-            Text { visible: menu.addOnly && menu.off.length === 0; width: parent.width; padding: 10; text: Tr.t("Все виджеты уже на столе"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 12 }
         }
     }
 

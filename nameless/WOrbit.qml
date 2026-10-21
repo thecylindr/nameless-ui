@@ -43,13 +43,14 @@ WCard {
             border.width: 1; border.color: Theme.accent
             Column {
                 x: 12; y: 8
-                Text { text: w.req ? w.req.name : ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
+                // после «Сопрячь» карточка сразу говорит, что ждём второе устройство, и сколько осталось
+                Text { text: !w.req ? "" : (w.req.localAccepted ? Tr.t("Ждём ") + w.req.name + " · " + OrbitData.secondsLeft(w.req) + Tr.t(" с") : (w.req.remoteAccepted ? w.req.name + Tr.t(" уже подтвердил") : w.req.name)); color: w.req && w.req.remoteAccepted && !w.req.localAccepted ? Theme.green : Theme.text; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold }
                 Text { text: w.req ? w.req.code : ""; color: Theme.accent; font.family: "monospace"; font.pixelSize: 20; font.weight: Font.Bold; font.letterSpacing: 3 }
             }
             Row {
                 anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
                 spacing: 6
-                GButton { ui: Theme; height: 30; implicitWidth: 40; label: ""; icon: "󰄬"; on: true; onClicked: OrbitData.accept(w.req.deviceId) }
+                GButton { visible: w.req !== null && !w.req.localAccepted; ui: Theme; height: 30; implicitWidth: 40; label: ""; icon: "󰄬"; on: true; onClicked: OrbitData.accept(w.req.deviceId) }
                 GButton { ui: Theme; height: 30; implicitWidth: 40; label: ""; icon: "󰅖"; onClicked: OrbitData.reject(w.req.deviceId) }
             }
         }
@@ -71,7 +72,7 @@ WCard {
                     Text { width: parent.width; elide: Text.ElideRight; text: row.modelData.name || ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
                     Text {
                         width: parent.width; elide: Text.ElideRight
-                        text: (row.modelData.address ? row.modelData.address + " · " : "") + (row.modelData.online ? Tr.t("󰌷 подключено") + (row.modelData.battery >= 0 ? " · " + row.modelData.battery + "%" + (row.modelData.charging ? Tr.t(" · заряжается") : "") : "")) : (row.modelData.paired ? Tr.t("сопряжено · не подключено") : Tr.t("рядом · не сопряжено")))
+                        text: (row.modelData.address ? row.modelData.address + " · " : "") + (row.modelData.online ? Tr.t("󰌷 подключено") + (row.modelData.battery >= 0 ? " · " + row.modelData.battery + "%" + (row.modelData.charging ? Tr.t(" · заряжается") : "") : "")) : (row.modelData.pairing ? Tr.t("ждёт сопряжения") : row.modelData.paired ? Tr.t("сопряжено · не подключено") : Tr.t("рядом · не сопряжено")))
                         color: row.modelData.online && row.modelData.battery >= 0 && row.modelData.battery < 20 && !row.modelData.charging ? Theme.red : Theme.sub
                         font.family: Theme.font; font.pixelSize: 11
                     }
@@ -81,7 +82,7 @@ WCard {
                     anchors { right: parent.right; verticalCenter: parent.verticalCenter }
                     spacing: 4
                     Repeater {
-                        model: row.modelData.online ? [{ i: "󰍉", a: "ring" }, { i: "󰆏", a: "clip" }] : (row.modelData.connecting ? [] : [{ i: "󰌘", a: "connect" }])
+                        model: row.modelData.online ? [{ i: "󰍉", a: "ring" }, { i: "󰆏", a: "clip" }] : (row.modelData.connecting || row.modelData.pairing ? [] : [{ i: "󰌘", a: "connect" }])
                         Rectangle {
                             required property var modelData
                             width: 30; height: 30; radius: 15

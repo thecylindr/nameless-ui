@@ -76,29 +76,79 @@ PanelWindow {
                 width: parent.width
                 spacing: 10
 
-                // запросы на сопряжение: код нужно сверить с экраном второго устройства
+                // запросы на сопряжение: код сверяется с экраном второго устройства, «Сопрячь» нажимают на обоих.
+                // Состояния карточки: ждём вас → второе устройство уже согласилось → вы согласились, ждём его (с отсчётом до отмены)
                 Repeater {
                     model: OrbitData.reqs
                     Rectangle {
                         id: rq
                         required property var modelData
+                        readonly property bool mine: rq.modelData.localAccepted === true
+                        readonly property bool theirs: rq.modelData.remoteAccepted === true
+                        readonly property int secs: OrbitData.secondsLeft(rq.modelData)
                         width: body.width; height: rcol.implicitHeight + 24
                         radius: 16
-                        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.14)
-                        border.width: 1; border.color: Theme.accent
+                        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, rq.mine ? 0.08 : 0.14)
+                        border.width: 1; border.color: rq.theirs && !rq.mine ? Theme.green : Theme.accent
                         Column {
                             id: rcol
                             x: 14; y: 12
                             width: parent.width - 28
                             spacing: 8
-                            Text { width: parent.width; elide: Text.ElideRight; text: (rq.modelData.outgoing ? Tr.t("Ждём подтверждения: ") : Tr.t("Сопряжение: ")) + rq.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                            Row {
+                                width: parent.width
+                                spacing: 8
+                                Text { id: rqIc; anchors.verticalCenter: parent.verticalCenter; text: OrbitData.kindIcon(rq.modelData.kind); color: Theme.accent; font.family: Theme.iconFont; font.pixelSize: 18 }
+                                Text {
+                                    width: parent.width - rqIc.width - rqLeft.width - 16
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    elide: Text.ElideRight
+                                    text: (rq.modelData.outgoing ? Tr.t("Сопряжение с ") : Tr.t("Запрос на сопряжение: ")) + rq.modelData.name
+                                    color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold
+                                }
+                                Text { id: rqLeft; anchors.verticalCenter: parent.verticalCenter; text: rq.secs + Tr.t(" с"); color: rq.secs < 20 ? Theme.red : Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                            }
                             Text { text: [rq.modelData.model, rq.modelData.address].filter(function (x) { return x; }).join(" · "); visible: text !== ""; color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
-                            Text { text: rq.modelData.code; color: Theme.accent; font.family: "monospace"; font.pixelSize: 26; font.weight: Font.Bold; font.letterSpacing: 4 }
-                            Text { text: Tr.t("Сверьте код с экраном второго устройства"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                            Text { text: rq.modelData.code; color: Theme.accent; font.family: "monospace"; font.pixelSize: 26; font.weight: Font.Bold; font.letterSpacing: 4; opacity: rq.mine ? 0.6 : 1 }
+                            // отсчёт до автоматической отмены (Orbit держит запрос 90 секунд)
+                            Rectangle {
+                                width: parent.width; height: 3; radius: 2
+                                color: Qt.rgba(1, 1, 1, 0.08)
+                                Rectangle { width: parent.width * Math.min(1, rq.secs / 90); height: parent.height; radius: 2; color: rq.secs < 20 ? Theme.red : Theme.accent; Behavior on width { NumberAnimation { duration: 900 } } }
+                            }
                             Row {
                                 spacing: 8
-                                GButton { ui: Theme; height: 32; implicitWidth: 110; label: Tr.t("Сопрячь"); icon: "󰄬"; on: true; onClicked: OrbitData.accept(rq.modelData.deviceId) }
-                                GButton { ui: Theme; height: 32; implicitWidth: 110; label: Tr.t("Отклонить"); onClicked: OrbitData.reject(rq.modelData.deviceId) }
+                                width: parent.width
+                                Text {
+                                    id: rqSpin
+                                    visible: rq.mine
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "󰑓"; color: Theme.accent; font.family: Theme.iconFont; font.pixelSize: 14
+                                    RotationAnimation on rotation { running: rqSpin.visible && OrbitData.panelOpen; loops: Animation.Infinite; from: 0; to: 360; duration: 900 }
+                                }
+                                Text {
+                                    width: parent.width - (rq.mine ? rqSpin.width + 8 : 0)
+                                    wrapMode: Text.WordWrap
+                                    text: rq.mine ? Tr.t("Вы подтвердили. Нажмите «Сопрячь» на ") + rq.modelData.name + Tr.t(" — код должен совпасть")
+                                          : (rq.theirs ? rq.modelData.name + Tr.t(" уже подтвердил — сверьте код и нажмите «Сопрячь»")
+                                                       : Tr.t("Сверьте код с экраном второго устройства и подтвердите на обоих"))
+                                    color: rq.theirs && !rq.mine ? Theme.green : Theme.sub; font.family: Theme.font; font.pixelSize: 11
+                                }
+                            }
+                            Row {
+                                spacing: 8
+                                width: parent.width
+                                GButton {
+                                    visible: !rq.mine
+                                    ui: Theme; height: 34; width: (parent.width - 8) / 2
+                                    label: Tr.t("Сопрячь"); icon: "󰄬"; on: true
+                                    onClicked: OrbitData.accept(rq.modelData.deviceId)
+                                }
+                                GButton {
+                                    ui: Theme; height: 34; width: rq.mine ? parent.width : (parent.width - 8) / 2
+                                    label: rq.mine ? Tr.t("Отменить") : Tr.t("Отклонить"); icon: "󰅖"
+                                    onClicked: OrbitData.reject(rq.modelData.deviceId)
+                                }
                             }
                         }
                     }
@@ -150,7 +200,7 @@ PanelWindow {
                             }
                             Text {
                                 width: parent.width; elide: Text.ElideRight
-                                text: dv.modelData.online ? Tr.t("󰌷 подключено") + (dv.modelData.battery >= 0 ? " · 󰁹 " + dv.modelData.battery + "%" + (dv.modelData.charging ? " ⚡" : "") : "") : (dv.modelData.connecting ? Tr.t("подключение…") : (dv.modelData.paired ? Tr.t("сопряжено · не подключено") : Tr.t("рядом · не сопряжено")))
+                                text: dv.modelData.online ? Tr.t("󰌷 подключено") + (dv.modelData.battery >= 0 ? " · 󰁹 " + dv.modelData.battery + "%" + (dv.modelData.charging ? " ⚡" : "") : "") : (dv.modelData.pairing ? Tr.t("ждёт сопряжения — см. выше") : dv.modelData.connecting ? Tr.t("подключение…") : (dv.modelData.paired ? Tr.t("сопряжено · не подключено") : Tr.t("рядом · не сопряжено")))
                                 color: dv.modelData.online && dv.modelData.battery >= 0 && dv.modelData.battery < 20 && !dv.modelData.charging ? Theme.red : Theme.sub
                                 font.family: Theme.iconFont; font.pixelSize: 11
                             }
@@ -179,7 +229,7 @@ PanelWindow {
                             anchors { right: parent.right; rightMargin: 10; verticalCenter: head72.verticalCenter }
                             spacing: 4
                             Repeater {
-                                model: dv.modelData.online ? [{ i: "󰍉", a: "ring" }, { i: "󰆏", a: "clip" }, { i: "󰈔", a: "file" }, { i: "󰹑", a: "view" }].concat((dv.modelData.remoteCapabilities || []).indexOf("secondScreen") >= 0 ? [{ i: "󰍺", a: "second" }] : []) : (dv.modelData.connecting ? [] : [{ i: "󰌘", a: "connect" }])
+                                model: dv.modelData.online ? [{ i: "󰍉", a: "ring" }, { i: "󰆏", a: "clip" }, { i: "󰈔", a: "file" }, { i: "󰹑", a: "view" }].concat((dv.modelData.remoteCapabilities || []).indexOf("secondScreen") >= 0 ? [{ i: "󰍺", a: "second" }] : []) : (dv.modelData.connecting || dv.modelData.pairing ? [] : [{ i: "󰌘", a: "connect" }])
                                 Rectangle {
                                     required property var modelData
                                     width: 32; height: 32; radius: 16
@@ -236,11 +286,15 @@ PanelWindow {
                     onClicked: go()
                 }
             }
+            // три кнопки на всю ширину: Orbit — главная, поиск — переключатель с состоянием, обновить — квадратная
             Row {
+                id: acts
+                width: parent.width
                 spacing: 8
-                GButton { ui: Theme; height: 34; implicitWidth: 120; label: Tr.t("Открыть Orbit"); icon: "󰏌"; on: true; onClicked: { OrbitData.show(); OrbitData.panelOpen = false; } }
-                GButton { ui: Theme; height: 34; implicitWidth: 100; label: OrbitData.discovery ? Tr.t("Стоп") : Tr.t("Искать"); onClicked: OrbitData.setDiscovery(!OrbitData.discovery) }
-                GButton { ui: Theme; height: 34; implicitWidth: 44; label: ""; icon: "󰑐"; onClicked: OrbitData.scan() }
+                readonly property real half: (width - refreshBtn.width - spacing * 2) / 2
+                GButton { ui: Theme; height: 36; width: acts.half; label: Tr.t("Открыть Orbit"); icon: "󰏌"; on: true; onClicked: { OrbitData.show(); OrbitData.panelOpen = false; } }
+                GButton { ui: Theme; height: 36; width: acts.half; label: OrbitData.discovery ? Tr.t("Поиск: вкл") : Tr.t("Поиск: выкл"); icon: OrbitData.discovery ? "󰍉" : "󰍊"; onClicked: OrbitData.setDiscovery(!OrbitData.discovery) }
+                GButton { id: refreshBtn; ui: Theme; height: 36; width: 44; implicitWidth: 44; label: ""; icon: "󰑐"; onClicked: OrbitData.scan() }
             }
         }
     }
