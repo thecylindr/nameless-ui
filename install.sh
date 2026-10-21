@@ -61,6 +61,14 @@ install_shell() {
     [[ -f /usr/share/applications/org.kde.dolphin.desktop ]] && xdg-mime default org.kde.dolphin.desktop inode/directory 2>/dev/null
 }
 
+# готовая сборка собрана на свежем Arch (Qt 6.12, ffmpeg 8): на не обновлённой системе не хватает библиотек — тогда нужна сборка из исходников
+orbit_bin_ok() {
+    local missing; missing="$(ldd "$HOME/.local/bin/nameless-orbit" 2>&1 | grep -E "not found" | sed 's/^[[:space:]]*//' | head -n5)"
+    [[ -z "$missing" ]] && return 0
+    warn "готовая сборка не подходит этой системе (нет библиотек):"; echo "$missing" | sed 's/^/        /'
+    return 1
+}
+
 # ---------- NameLess Orbit ----------
 # Порядок: пакет из AUR → готовая сборка из релиза GitHub (в ~/.local, без компиляции, с проверкой суммы) → сборка из исходников
 install_orbit() {
@@ -114,9 +122,14 @@ install_orbit() {
                 fi
                 if mkdir -p "$HOME/.local" && tar -xzf "$tmp/orbit.tar.gz" -C "$HOME/.local" --strip-components=1; then
                     rm -rf "$tmp"
-                    say "Orbit установлен в ~/.local (запуск: nameless-orbit). Если команда не находится — добавьте ~/.local/bin в PATH."
-                    say "обновить: запустите ./install.sh orbit ещё раз"
-                    return
+                    if orbit_bin_ok; then
+                        say "Orbit установлен в ~/.local (запуск: nameless-orbit). Если команда не находится — добавьте ~/.local/bin в PATH."
+                        say "обновить: запустите ./install.sh orbit ещё раз"
+                        return
+                    fi
+                    rm -f "$HOME/.local/bin/nameless-orbit"
+                    warn "собираю Orbit из исходников под вашу систему"
+                    tmp=""
                 fi
             fi
             rm -rf "$tmp"
