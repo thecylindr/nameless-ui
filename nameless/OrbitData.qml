@@ -96,13 +96,16 @@ Singleton {
     function connectTo(id) { call("Connect", "s", id); }
     function ring(id) { call("Ring", "s", id); }
     function sendClipboard(id) { call("SendClipboard", "s", id); }
-    function show() { if (running) call("Show", "", ""); else Quickshell.execDetached(["nameless-orbit"]); }
+    function show() { if (running) call("Show", "", ""); else spawnOrbit(""); }
     // Orbit не запущен, а он нужен — поднимаем без окна
     function autoLaunch() {
         if (launched || !autostart || !need) return;
         launched = true;
         start(false);
     }
+    // quickshell стартует из Hyprland, где в PATH нет ~/.local/bin (туда install.sh кладёт ссылку на nameless-orbit): без этого «не найден исполняемый файл»
+    readonly property string orbitPath: "export PATH=\"$HOME/.local/bin:$HOME/.local/opt/nameless-orbit:/usr/local/bin:/opt/nameless-orbit:/opt/nameless-orbit/bin:$PATH\"; "
+    function spawnOrbit(args) { Quickshell.execDetached(["sh", "-c", orbitPath + "command -v nameless-orbit >/dev/null 2>&1 && exec nameless-orbit " + args]); }
     // ---------- запуск с понятным итогом (кнопка «Запустить») ----------
     // launchState: "" — нет запуска, starting — ждём ответа на шине, failed — не вышло (launchError — почему, launchFix — что можно сделать)
     property string launchState: ""
@@ -114,7 +117,7 @@ Singleton {
     Process {
         id: starter
         property bool restart: false
-        command: ["sh", "-c", (restart ? "pkill -f '[/]bin/nameless-orbit'; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -f '[/]bin/nameless-orbit' >/dev/null || break; sleep 0.3; done; "
+        command: ["sh", "-c", d.orbitPath + (restart ? "pkill -f '[/]bin/nameless-orbit'; for i in 1 2 3 4 5 6 7 8 9 10; do pgrep -f '[/]bin/nameless-orbit' >/dev/null || break; sleep 0.3; done; "
                                        : "pgrep -f '[/]bin/nameless-orbit' >/dev/null && exit 3; ")
                              + "command -v nameless-orbit >/dev/null 2>&1 || exit 127; setsid -f nameless-orbit --background >/dev/null 2>&1; exit 0"]
         onExited: code => {
@@ -180,7 +183,7 @@ Singleton {
     function accept(id) { patchReq(id, { localAccepted: true }); call("AcceptPairing", "s", id); }
     function reject(id) { reqs = reqs.filter(function (r) { return r.deviceId !== id; }); call("RejectPairing", "s", id); }
     function connectAddress(host, port) { call("ConnectAddress", "si", [host, String(port)]); }
-    function launch() { Quickshell.execDetached(["nameless-orbit"]); later.interval = 2500; later.restart(); }     // с окном
+    function launch() { spawnOrbit(""); later.interval = 2500; later.restart(); }     // с окном
 
     function kindIcon(k) { return ({ phone: "󰏲", tablet: "󰓷", laptop: "󰌢", server: "󰒋" })[k] || "󰟀"; }
 }
