@@ -55,7 +55,7 @@ qs -c ThemeDrawer &          # the appearance drawer
 
 **Requires:** `quickshell`, Hyprland (or driftwm), PipeWire, a Nerd Font (icons). For specific parts: `cliphist` and `wl-clipboard` (clipboard), `gpu-screen-recorder` or `wf-recorder`, `slurp` and `ffmpeg` (recording), `hyprpicker` (color picker), `playerctl`, `NetworkManager`, `awww` (smooth wallpaper changes).
 
-> **Themes.** Switching templates and palettes is done by the script `~/.config/hypr/Scripts/theme.sh`, which ships with the Hyprland config set ([glassrice](https://github.com/thecylindr/glassrice)). Without it the shell works, but the Appearance drawer cannot apply templates.
+> **Themes.** Switching templates and palettes is done by the script `~/.config/hypr/Scripts/theme.sh`, which ships with the Hyprland config set ([NameLess UI](https://github.com/thecylindr/nameless-ui)). Without it the shell works, but the Appearance drawer cannot apply templates.
 
 ## ⚙️ Setup
 
@@ -100,4 +100,4 @@ ThemeDrawer/           the appearance drawer (separate process)
 
 ## 📄 License
 
-[MIT](LICENSE).
+**NameLess Source-Available License 1.0** — [LICENSE](LICENSE). In short: you may read, build and use the code **for yourself, non-commercially**; a fork needs the author's written permission first (ask in an issue beforehand). You may not copy, fork without permission and publish the project (whole or in substantial parts), release derivative versions, use it commercially, pass it off as your own, or build datasets from the code to train models. Need more — contact the author via the repository. Third-party components (Qt, FFmpeg, Quickshell…) stay under their own licences.
