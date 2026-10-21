@@ -179,7 +179,7 @@ PanelWindow {
                             anchors { right: parent.right; rightMargin: 10; verticalCenter: head72.verticalCenter }
                             spacing: 4
                             Repeater {
-                                model: dv.modelData.online ? [{ i: "󰍉", a: "ring" }, { i: "󰆏", a: "clip" }, { i: "󰈔", a: "file" }, { i: "󰹑", a: "view" }] : (dv.modelData.connecting ? [] : [{ i: "󰌘", a: "connect" }])
+                                model: dv.modelData.online ? [{ i: "󰍉", a: "ring" }, { i: "󰆏", a: "clip" }, { i: "󰈔", a: "file" }, { i: "󰹑", a: "view" }].concat((dv.modelData.remoteCapabilities || []).indexOf("secondScreen") >= 0 ? [{ i: "󰍺", a: "second" }] : []) : (dv.modelData.connecting ? [] : [{ i: "󰌘", a: "connect" }])
                                 Rectangle {
                                     required property var modelData
                                     width: 32; height: 32; radius: 16
@@ -194,6 +194,7 @@ PanelWindow {
                                             else if (parent.modelData.a === "clip") OrbitData.sendClipboard(id);
                                             else if (parent.modelData.a === "file") OrbitData.sendFile(id);
                                             else if (parent.modelData.a === "view") { OrbitData.panelOpen = false; OrbitData.viewScreen(id); }
+                                            else if (parent.modelData.a === "second") { OrbitData.panelOpen = false; OrbitData.secondScreen(id); }
                                             else OrbitData.connectTo(id);
                                         }
                                     }

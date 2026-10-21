@@ -122,7 +122,7 @@ install_orbit() {
         say "ищу последнюю готовую сборку Orbit на GitHub ($slug)"
         local url tmp sums want got
         url="$(curl -fsSL "https://api.github.com/repos/$slug/releases" 2>/dev/null \
-            | jq -r '[.[] | select(.draft == false)][0].assets[]? | select(.name | test("^nameless-orbit-[0-9.]+-linux-x86_64\\.tar\\.gz$")) | .browser_download_url' 2>/dev/null | head -n1)"
+            | jq -r '[[.[] | select(.draft == false)][0].assets[]? | select(.name | test("^nameless-orbit-[0-9.]+-(bundle-)?linux-x86_64\\.tar\\.gz$"))] | sort_by(.name | contains("bundle") | not) | .[0].browser_download_url // empty' 2>/dev/null | head -n1)"
         if [[ -n "$url" ]]; then
             tmp="$(mktemp -d)"
             say "скачиваю: ${url##*/}"

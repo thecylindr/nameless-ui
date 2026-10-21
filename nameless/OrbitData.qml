@@ -101,6 +101,7 @@ Singleton {
     }
     function viewScreen(deviceId) { call("ViewScreen", "s", deviceId); }       // посмотреть экран устройства (откроется окно Orbit)
     function shareScreen(deviceId) { call("ShareScreen", "s", deviceId); }     // показать этому устройству свой экран
+    function secondScreen(deviceId) { call("SecondScreen", "s", deviceId); }  // этот компьютер становится вторым монитором того устройства (где Hyprland или driftwm)
     function runCommand(deviceId, commandId) { call("RunCommand", "ss", [deviceId, commandId]); }
     // включить или выключить Orbit целиком; при выключении запущенный Orbit завершается (иначе он продолжит держать порт и сеть)
     function setEnabled(on) {
