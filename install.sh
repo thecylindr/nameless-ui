@@ -48,6 +48,8 @@ install_shell() {
         cp -a "$HERE/$d" "$DEST/$d"
         say "установлен $d"
     done
+    # папки — в Dolphin, а не в терминале (xdg-open без этой привязки берёт kitty-open)
+    [[ -f /usr/share/applications/org.kde.dolphin.desktop ]] && xdg-mime default org.kde.dolphin.desktop inode/directory 2>/dev/null
 }
 
 # ---------- NameLess Orbit ----------
