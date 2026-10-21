@@ -48,6 +48,15 @@ install_shell() {
         cp -a "$HERE/$d" "$DEST/$d"
         say "установлен $d"
     done
+    # запуск программ: qs-app.sh (окружение сессии) нужен AppRun.qml; rofi-run.sh — фокус на уже открытое окно (Incy, Telegram…) при запуске из rofi
+    mkdir -p "$HOME/.config/hypr/Scripts"
+    cp -af "$HERE/scripts/qs-app.sh" "$HERE/scripts/rofi-run.sh" "$HOME/.config/hypr/Scripts/"
+    chmod +x "$HOME/.config/hypr/Scripts/qs-app.sh" "$HOME/.config/hypr/Scripts/rofi-run.sh"
+    if [[ -f "$HOME/.config/rofi/config.rasi" ]] && ! grep -q "rofi-run.sh" "$HOME/.config/rofi/config.rasi"; then
+        cp -a "$HOME/.config/rofi/config.rasi" "$HOME/.config/rofi/config.rasi.bak"
+        sed -i '0,/^\( *\)terminal:.*$/s||&\n  run-command:         "sh -c '"'"'r=\\"$HOME/.config/hypr/Scripts/rofi-run.sh\\"; if [ -x \\"$r\\" ]; then exec \\"$r\\" \\"$@\\"; else exec \\"$@\\"; fi'"'"' _ {cmd}";|' "$HOME/.config/rofi/config.rasi"
+        say "rofi: добавлен запуск через rofi-run.sh (копия прежнего конфига — config.rasi.bak)"
+    fi
     # папки — в Dolphin, а не в терминале (xdg-open без этой привязки берёт kitty-open)
     [[ -f /usr/share/applications/org.kde.dolphin.desktop ]] && xdg-mime default org.kde.dolphin.desktop inode/directory 2>/dev/null
 }
