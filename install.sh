@@ -65,7 +65,8 @@ install_shell() {
 # обычный архив (usr/bin, usr/share…) — прямо в ~/.local
 orbit_unpack() {
     local ar="$1" dst="$HOME/.local/opt/nameless-orbit"
-    if tar -tzf "$ar" | grep -q '/AppRun$'; then
+    local list; list="$(tar -tzf "$ar" 2>/dev/null)"      # не конвейером в grep -q: при pipefail он закрывает канал раньше tar и условие ложно
+    if grep -q '/AppRun$' <<<"$list"; then
         rm -rf "$dst"; mkdir -p "$dst" "$HOME/.local/bin" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/256x256/apps" || return 1
         tar -xzf "$ar" -C "$dst" --strip-components=1 || return 1
         ln -sf "$dst/nameless-orbit" "$HOME/.local/bin/nameless-orbit"
