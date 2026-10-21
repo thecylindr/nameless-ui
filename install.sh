@@ -76,7 +76,9 @@ orbit_unpack() {
         rm -rf "$dst"; mkdir -p "$dst" "$HOME/.local/bin" "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/256x256/apps" || return 1
         tar -xzf "$ar" -C "$dst" --strip-components=1 || return 1
         ln -sf "$dst/nameless-orbit" "$HOME/.local/bin/nameless-orbit"
-        cp -f "$dst/share/applications/nameless-orbit.desktop" "$HOME/.local/share/applications/" 2>/dev/null
+        # в ярлыке — полный путь: у rofi и оболочки, запущенных из сессии, ~/.local/bin может не быть в PATH
+        sed "s|^Exec=.*|Exec=$HOME/.local/bin/nameless-orbit|; s|^TryExec=.*||" "$dst/share/applications/nameless-orbit.desktop" > "$HOME/.local/share/applications/nameless-orbit.desktop" 2>/dev/null
+        command -v update-desktop-database >/dev/null && update-desktop-database "$HOME/.local/share/applications" 2>/dev/null
         cp -f "$dst/share/icons/hicolor/256x256/apps/nameless-orbit.png" "$HOME/.local/share/icons/hicolor/256x256/apps/" 2>/dev/null
         return 0
     fi
