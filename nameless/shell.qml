@@ -201,7 +201,8 @@ ShellRoot {
     IpcHandler {
         target: "crossing"
         function set(key: string, value: string): void { try { Config.set("crossing." + key, JSON.parse(value)); } catch (e) { } }
-        function preview(): void { crossEdge.preview(); }
+        function preview(scene: string): void { crossEdge.preview(scene); }
+        function autoplace(reset: bool): void { crossEdge.autoPlace(reset); }
         function stop(): void { OrbitData.crossStop(); }
     }
     IpcHandler {

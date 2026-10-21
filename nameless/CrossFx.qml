@@ -2,13 +2,13 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Shapes
 
-// Эффект перехода курсора на краю экрана: свечение, волна, искры, линия, портал.
+// Эффект перехода курсора на краю экрана: свечение, волна, искры, линия, портал, комета, северное сияние, лучи, эхо; отдельно — «отказ» (красный крест) для неудавшегося перехода.
 // Рисуется в «каноническом» виде — край слева, точка на высоте posC; для остальных краёв холст поворачивается.
 // Картинка — дважды: размытая копия даёт мягкий ореол (bloom), чёткая — яркое ядро. Всё движение — одно свойство t (0 → 1);
 // слой эффекта — квадрат вокруг точки, а не весь экран: размытие считается только там
 Item {
     id: fx
-    property string kind: "glow"          // glow | ripple | sparks | line | portal
+    property string kind: "glow"          // glow | ripple | sparks | line | portal | comet | aurora | burst | echo | deny
     property string side: "right"         // край экрана
     property real pos: 0.5                // место вдоль края, 0..1
     property string dir: "out"            // out — курсор ушёл, in — пришёл
@@ -243,6 +243,128 @@ Item {
                     dashPattern: [2, 6]
                     dashOffset: fx.t * 40
                     PathAngleArc { centerX: fx.span; centerY: fx.span; radiusX: 110 * fx.k; radiusY: 300 * fx.k * (0.4 + 0.6 * portal.open); startAngle: 0; sweepAngle: 360 }
+                }
+            }
+
+            // ---------- комета: яркая точка с хвостом летит от края вглубь экрана (пришёл) или к краю (ушёл) ----------
+            Item {
+                visible: fx.kind === "comet"
+                anchors.fill: parent
+                readonly property real travel: 440 * fx.k * (fx.dir === "in" ? fx.ease : 1 - fx.ease)
+                readonly property real tail: (90 + 160 * fx.bell) * fx.k
+                Rectangle {
+                    x: parent.parent.cx + parent.travel - (fx.dir === "in" ? width : 0)      // хвост — позади головы; при «ушёл» картинка перевёрнута
+                    rotation: fx.dir === "in" ? 0 : 180
+                    y: parent.parent.cy - height / 2
+                    width: parent.tail; height: 5 * fx.k; radius: height / 2
+                    opacity: fx.bell
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0; color: "transparent" }
+                        GradientStop { position: 0.75; color: fx.tint }
+                        GradientStop { position: 1; color: fx.hot }
+                    }
+                }
+                Rectangle {
+                    visible: artRoot.halo
+                    readonly property real d: 70 * fx.k
+                    x: parent.parent.cx + parent.travel - d / 2; y: parent.parent.cy - d / 2
+                    width: d; height: d; radius: d / 2
+                    color: fx.tint; opacity: fx.bell * 0.6
+                }
+                Rectangle {
+                    readonly property real d: 16 * fx.k
+                    x: parent.parent.cx + parent.travel - d / 2; y: parent.parent.cy - d / 2
+                    width: d; height: d; radius: d / 2
+                    color: "white"; opacity: fx.bell
+                }
+            }
+
+            // ---------- сияние: мягкие вертикальные завесы колышутся у края ----------
+            Repeater {
+                model: fx.kind === "aurora" ? 4 : 0
+                Rectangle {
+                    required property int index
+                    readonly property real sway: Math.sin(fx.t * 5 + index * 1.7)
+                    x: parent.cx + index * 16 * fx.k * (0.4 + fx.ease)
+                    y: parent.cy - height / 2 + sway * 22 * fx.k
+                    width: (170 - index * 28) * fx.k
+                    height: (300 + 120 * Math.sin(fx.t * 3 + index)) * fx.k * (fx.dir === "in" ? 0.5 + 0.5 * fx.ease : 1)
+                    opacity: fx.bell * (0.55 - index * 0.1)
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0; color: index % 2 === 0 ? fx.tint : fx.hot }
+                        GradientStop { position: 1; color: "transparent" }
+                    }
+                }
+            }
+
+            // ---------- лучи: веер тонких лучей из точки перехода ----------
+            Repeater {
+                model: fx.kind === "burst" ? 15 : 0
+                Item {
+                    required property int index
+                    readonly property real a: (-80 + index * (160 / 14)) * Math.PI / 180
+                    readonly property real len: (60 + 300 * fx.k * (0.4 + 0.6 * ((index * 37) % 10) / 9)) * (fx.dir === "in" ? fx.easeQ : 1 - fx.easeQ * 0.6)
+                    x: parent.cx; y: parent.cy
+                    rotation: a * 180 / Math.PI
+                    opacity: fx.fade * Math.min(1, fx.t * 8)
+                    Rectangle {
+                        y: -height / 2
+                        width: parent.len; height: (index % 3 === 0 ? 3.5 : 2) * fx.k; radius: height / 2
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0; color: index % 3 === 0 ? "white" : fx.hot }
+                            GradientStop { position: 1; color: "transparent" }
+                        }
+                    }
+                }
+            }
+
+            // ---------- эхо: копии светящейся линии края уходят вглубь экрана (пришёл) или втягиваются (ушёл) ----------
+            Repeater {
+                model: fx.kind === "echo" ? 5 : 0
+                Rectangle {
+                    required property int index
+                    readonly property real tt: Math.max(0, Math.min(1, (fx.t - index * 0.07) / 0.8))
+                    readonly property real e: 1 - Math.pow(1 - tt, 3)
+                    x: parent.cx + (fx.dir === "in" ? e : 1 - e) * (30 + index * 46) * fx.k
+                    y: parent.cy - height / 2
+                    width: (4 - index * 0.5) * fx.k; height: (360 - index * 40) * fx.k; radius: width / 2
+                    opacity: tt > 0 ? Math.sin(Math.PI * tt) * (1 - index * 0.16) : 0
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: "transparent" }
+                        GradientStop { position: 0.5; color: index === 0 ? fx.hot : fx.tint }
+                        GradientStop { position: 1; color: "transparent" }
+                    }
+                }
+            }
+
+            // ---------- отказ: красный крест на краю и дрожащая полоса ----------
+            Item {
+                visible: fx.kind === "deny"
+                anchors.fill: parent
+                Rectangle {
+                    x: parent.parent.cx + Math.sin(fx.t * 46) * 6 * (1 - fx.t) * fx.k; y: parent.parent.cy - height / 2
+                    width: 5 * fx.k; height: 260 * fx.k; radius: width / 2
+                    opacity: fx.bell
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: "transparent" }
+                        GradientStop { position: 0.5; color: fx.tint }
+                        GradientStop { position: 1; color: "transparent" }
+                    }
+                }
+                Repeater {
+                    model: 2
+                    Rectangle {
+                        required property int index
+                        x: parent.parent.cx + 34 * fx.k - width / 2; y: parent.parent.cy - height / 2
+                        width: 56 * fx.k; height: 7 * fx.k; radius: height / 2
+                        rotation: index === 0 ? 45 : -45
+                        color: fx.hot
+                        opacity: fx.bell * Math.min(1, fx.t * 10)
+                        scale: 0.7 + 0.3 * fx.easeQ
+                    }
                 }
             }
         }

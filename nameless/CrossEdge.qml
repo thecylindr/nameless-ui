@@ -9,6 +9,9 @@ import Quickshell.Hyprland
 //         delay мс — Orbit забирает мышь и клавиатуру и ведёт курсор на соседе (D-Bus CrossTo). Опроса курсора нет — только наведение
 //   эффект: Orbit шлёт сигнал Crossing (ушёл / пришёл, край, место) — на нужном мониторе на время эффекта появляется прозрачный
 //         слой без ввода и исчезает сам. Работает и на компьютере, куда курсор пришёл
+//   сценарии эффектов (Config.crossing.scenes): out — курсор ушёл, in — пришёл, deny — переход не удался (красный крест), link — сосед появился или пропал
+//         на своём краю, hint — курсор у края, за которым есть сосед (лёгкая подсказка). Эффект ухода и прихода можно выбрать отдельно (effectOut / effectIn)
+//   расстановка соседей: подключённые без места (нет записи в links) сами получают край — справа, слева, сверху, снизу; «Нет» в шторке запоминается и не меняется
 //   Scroll Lock — вернуть курсор домой. Настройки — «Оформление» → «Курсор» (через ipc crossing)
 Scope {
     id: cross
@@ -62,7 +65,7 @@ Scope {
                 acceptedButtons: Qt.NoButton
                 property real p: 0.5
                 onPositionChanged: (m) => p = strip.side === "left" || strip.side === "right" ? m.y / Math.max(1, height) : m.x / Math.max(1, width)
-                onEntered: if (Date.now() > cross.coolUntil) dwell.restart()
+                onEntered: if (Date.now() > cross.coolUntil) { dwell.restart(); cross.hint(strip.side, edge.p, strip.screen ? strip.screen.name : ""); }
                 onExited: dwell.stop()
             }
             // задержка: случайное касание края (полоса прокрутки, угол экрана) не уводит курсор
@@ -75,22 +78,77 @@ Scope {
     }
 
     // ---------- эффекты ----------
-    property var fx: []                    // идущие эффекты: { n, dir, side, pos, screen }
+    property var fx: []                    // идущие эффекты: { n, dir, side, pos, screen, kind, kk }
     property int fxN: 0
+    function scene(name) { return !cfg.scenes || cfg.scenes[name] !== false; }
+    function kindFor(dir) {
+        if (dir === "deny") return "deny";
+        if (dir === "hint") return "glow";
+        var own = dir === "out" ? cfg.effectOut : cfg.effectIn;
+        return own || cfg.effect || "glow";
+    }
+    // o: { dir: out | in | deny | hint, side, pos, screen, peer?, soft? }; soft — тише обычного (подсказка, появление соседа)
     function show(o) {
         if (o.dir === "in" && o.peer !== undefined) coolUntil = Date.now() + 700;
-        if ((cfg.effect || "glow") === "none") return;
+        if ((cfg.effect || "glow") === "none" && !cfg.effectOut && !cfg.effectIn && o.dir !== "deny") return;
+        if (!scene(o.link ? "link" : o.dir)) return;
+        var kind = kindFor(o.dir);
+        if (kind === "none") return;
         fxN++;
-        fx = fx.concat([Object.assign({ n: fxN }, o)]);
+        fx = fx.concat([Object.assign({ n: fxN, kind: kind, kk: o.dir === "hint" ? 0.45 : (o.soft ? 0.7 : 1) }, o)]);
+    }
+    property double hintUntil: 0           // подсказка у края не чаще раза в 1,5 с: курсор у кромки легко дрожит
+    function hint(side, pos, screen) {
+        if (Date.now() < hintUntil) return;
+        hintUntil = Date.now() + 1500;
+        show({ dir: "hint", side: side, pos: pos, screen: screen });
     }
     function done(n) { fx = fx.filter(function (f) { return f.n !== n; }); }
-    // пример для настроек: ушёл с правого края и пришёл с левого — на мониторе с фокусом
-    function preview() {
+    // пример для настроек: сцена scene — out (уход и приход подряд), deny, hint, link
+    function preview(scene) {
         var f = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : (screens.length ? screens[0].name : "");
+        if (scene === "deny") { show({ dir: "deny", side: "right", pos: 0.5, screen: f }); return; }
+        if (scene === "hint") { show({ dir: "hint", side: "right", pos: 0.5, screen: f }); return; }
+        if (scene === "link") { show({ dir: "in", side: "right", pos: 0.5, screen: f, soft: true, link: true }); return; }
         show({ dir: "out", side: "right", pos: 0.5, screen: f });
         later.restart();
     }
     Timer { id: later; interval: 380; onTriggered: { var f = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""; cross.show({ dir: "in", side: "left", pos: 0.5, screen: f }); } }
+
+    // ---------- расстановка соседей ----------
+    // подключённые с переходом курсора, которым ещё не назначен край (записи нет совсем — «Нет» из шторки запоминается как side: "off")
+    function autoPlace(reset) {
+        if (!cfg.enabled) return;
+        var links = reset ? [] : (cfg.links || []).slice();
+        var peers = OrbitData.connected.filter(function (c) { return (c.remoteCapabilities || []).indexOf("crossing") >= 0; });
+        var taken = {};
+        links.forEach(function (l) { if (l.side && l.side !== "off") taken[l.side] = true; });
+        var free = ["right", "left", "top", "bottom"].filter(function (x) { return !taken[x]; });
+        var changed = reset === true;
+        peers.forEach(function (c) {
+            if (links.some(function (l) { return l.device === c.deviceId; }) || free.length === 0) return;
+            links.push({ device: c.deviceId, name: c.name, side: free.shift() });
+            changed = true;
+        });
+        if (changed) Config.set("crossing.links", links);
+    }
+    Timer { id: placeT; interval: 1500; onTriggered: cross.autoPlace(false) }
+    Connections { target: OrbitData; function onConnectedChanged() { if (cross.on) placeT.restart(); } }
+    onOnChanged: if (on) placeT.restart()
+
+    // сосед появился или пропал на своём краю — короткая вспышка (первые секунды после запуска не считаются)
+    property var seen: ({})
+    property bool ready: false
+    Timer { running: true; interval: 4000; onTriggered: cross.ready = true }
+    onLinksChanged: {
+        var now = {};
+        links.forEach(function (l) { now[l.device] = l; });
+        if (ready) {
+            for (var d in now) if (!seen[d]) show({ dir: "in", side: now[d].side, pos: 0.5, screen: (screenFor(now[d].side) || {}).name || "", soft: true, link: true });
+            for (var o in seen) if (!now[o]) show({ dir: "out", side: seen[o].side, pos: 0.5, screen: (screenFor(seen[o].side) || {}).name || "", soft: true, link: true });
+        }
+        seen = now;
+    }
 
     Variants {
         model: cross.fx
@@ -106,13 +164,13 @@ Scope {
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             CrossFx {
                 anchors.fill: parent
-                kind: cross.cfg.effect || "glow"
+                kind: modelData.kind
                 side: modelData.side
                 pos: modelData.pos
-                dir: modelData.dir
-                tint: cross.tintOf(cross.cfg.color || "accent")
-                duration: cross.cfg.duration || 700
-                k: cross.cfg.intensity || 1
+                dir: modelData.dir === "deny" ? "out" : modelData.dir
+                tint: modelData.dir === "deny" ? "#ff4d5e" : cross.tintOf(cross.cfg.color || "accent")
+                duration: modelData.dir === "hint" ? 450 : (cross.cfg.duration || 700)
+                k: (cross.cfg.intensity || 1) * (modelData.kk || 1)
                 onFinished: cross.done(modelData.n)
             }
         }

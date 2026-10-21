@@ -46,10 +46,17 @@ ShellRoot {
     }
     function crossSide(dev, name, side) {
         var l = (cross.links || []).filter(function (x) { return x.device !== dev; });
-        // одна сторона — один сосед: тот, кто стоял на этом краю, снимается
-        if (side !== "off") l = l.filter(function (x) { return x.side !== side; }).concat([{ device: dev, name: name, side: side }]);
-        crossSet("links", l);
+        // одна сторона — один сосед: тот, кто стоял на этом краю, снимается; «Нет» запоминается (side: "off"), чтобы соседа не расставляло заново само
+        if (side !== "off") l = l.filter(function (x) { return x.side !== side; });
+        crossSet("links", l.concat([{ device: dev, name: name, side: side }]));
     }
+    // расстановка и показ сцен делает NameLess (ipc доходит раньше, чем применится значение, поэтому — с задержкой)
+    function crossPlace(reset) { placeT.reset = reset; placeT.restart(); }
+    Timer { id: placeT; property bool reset: false; interval: 450; onTriggered: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "autoplace", reset ? "true" : "false"]) }
+    function sceneOn(k) { return !cross.scenes || cross.scenes[k] !== false; }
+    function sceneSet(k, v) { var n = Object.assign({ out: true, in: true, deny: true, link: true, hint: true }, cross.scenes || {}); n[k] = v; crossSet("scenes", n); }
+    function crossTry(scene) { sceneT.scene = scene; sceneT.restart(); }
+    Timer { id: sceneT; property string scene: "out"; interval: 350; onTriggered: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "preview", scene]) }
     function sideOf(dev) { var l = cross.links || []; for (var i = 0; i < l.length; i++) if (l[i].device === dev) return l[i].side; return "off"; }
     // соседи из Orbit: подключённые, у которых есть переход курсора
     property var crossPeers: []
@@ -1176,7 +1183,7 @@ ShellRoot {
                     ui: look; label: Tr.t("Курсор переходит на соседний компьютер")
                     sub: Tr.t("упёрся в край — мышь и клавиатура управляют компьютером за этим краем (NameLess Orbit). Обратно — тем же краем или Scroll Lock")
                     checked: root.cross.enabled === true
-                    onToggled: (v) => root.crossSet("enabled", v)
+                    onToggled: (v) => { root.crossSet("enabled", v); if (v) root.crossPlace(false); }
                 }
                 Text {
                     width: parent.width; wrapMode: Text.WordWrap
@@ -1199,18 +1206,24 @@ ShellRoot {
                         }
                     }
                 }
-                GButton { ui: look; height: 34; icon: "󰑐"; label: Tr.t("Обновить список"); onClicked: if (!crossDevs.running) crossDevs.running = true }
+                Text { visible: root.crossPeers.some(function (p) { return p.ok; }); width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("Край — там, где у вас стоит соседний компьютер. Новым соседям край назначается сам (справа, слева, сверху, снизу); «Нет» запоминается."); color: look.sub; font.family: look.font; font.pixelSize: 12 }
+                Flow {
+                    width: parent.width; spacing: 8
+                    GButton { ui: look; height: 34; icon: "󰑐"; label: Tr.t("Обновить список"); onClicked: if (!crossDevs.running) crossDevs.running = true }
+                    GButton { ui: look; height: 34; icon: "󰕰"; label: Tr.t("Расставить заново"); onClicked: { root.crossSet("links", []); root.crossPlace(true); } }
+                }
             }
 
             GSection {
                 ui: look; title: Tr.t("Эффект на краях")
-                Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("где курсор ушёл и где пришёл — на обоих компьютерах"); color: look.sub; font.family: look.font; font.pixelSize: 12 }
+                Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("где курсор ушёл и где пришёл — на обоих компьютерах. Этот выбор — общий; ниже можно задать отдельный эффект для ухода и для прихода"); color: look.sub; font.family: look.font; font.pixelSize: 12 }
                 Flow {
                     width: parent.width
                     spacing: 8
                     Repeater {
                         model: [{ v: "glow", t: Tr.t("Свечение"), i: "󰛨" }, { v: "ripple", t: Tr.t("Волна"), i: "󰖟" }, { v: "sparks", t: Tr.t("Искры"), i: "󰸞" },
-                                { v: "line", t: Tr.t("Линия"), i: "󰕞" }, { v: "portal", t: Tr.t("Портал"), i: "󰕰" }, { v: "none", t: Tr.t("Без эффекта"), i: "󰜺" }]
+                                { v: "line", t: Tr.t("Линия"), i: "󰕞" }, { v: "portal", t: Tr.t("Портал"), i: "󰕰" }, { v: "comet", t: Tr.t("Комета"), i: "󰓅" },
+                                { v: "aurora", t: Tr.t("Сияние"), i: "󱓻" }, { v: "burst", t: Tr.t("Лучи"), i: "󰇁" }, { v: "echo", t: Tr.t("Эхо"), i: "󰝚" }, { v: "none", t: Tr.t("Без эффекта"), i: "󰜺" }]
                         GTile {
                             required property var modelData
                             ui: look
@@ -1227,7 +1240,7 @@ ShellRoot {
                     }
                 }
                 // показ после выбора: ipc доходит до NameLess раньше, чем он применит значение, поэтому — с задержкой
-                Timer { id: prevT; interval: 350; onTriggered: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "preview"]) }
+                Timer { id: prevT; interval: 350; onTriggered: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "preview", "out"]) }
                 Text { text: Tr.t("Цвет"); color: look.text; font.family: look.font; font.pixelSize: 13 }
                 GSegment {
                     ui: look
@@ -1256,7 +1269,56 @@ ShellRoot {
                     value: root.cross.delay === undefined ? 120 : root.cross.delay
                     onCommitted: (v) => root.crossSet("delay", Math.round(v))
                 }
-                GButton { ui: look; height: 34; icon: "󰐊"; label: Tr.t("Показать эффект"); onClicked: prevT.restart() }
+                Text { text: Tr.t("Эффект ухода"); color: look.text; font.family: look.font; font.pixelSize: 13 }
+                Flow {
+                    width: parent.width; spacing: 6
+                    Repeater {
+                        model: [{ v: "", t: Tr.t("Как общий") }, { v: "glow", t: Tr.t("Свечение") }, { v: "ripple", t: Tr.t("Волна") }, { v: "sparks", t: Tr.t("Искры") }, { v: "line", t: Tr.t("Линия") }, { v: "portal", t: Tr.t("Портал") },
+                                { v: "comet", t: Tr.t("Комета") }, { v: "aurora", t: Tr.t("Сияние") }, { v: "burst", t: Tr.t("Лучи") }, { v: "echo", t: Tr.t("Эхо") }]
+                        GTile {
+                            required property var modelData
+                            ui: look; width: 88; height: 32
+                            on: (root.cross.effectOut || "") === modelData.v
+                            onClicked: { root.crossSet("effectOut", modelData.v); root.crossTry("out"); }
+                            Text { anchors.centerIn: parent; text: modelData.t; color: look.text; font.family: look.font; font.pixelSize: 11 }
+                        }
+                    }
+                }
+                Text { text: Tr.t("Эффект прихода"); color: look.text; font.family: look.font; font.pixelSize: 13 }
+                Flow {
+                    width: parent.width; spacing: 6
+                    Repeater {
+                        model: [{ v: "", t: Tr.t("Как общий") }, { v: "glow", t: Tr.t("Свечение") }, { v: "ripple", t: Tr.t("Волна") }, { v: "sparks", t: Tr.t("Искры") }, { v: "line", t: Tr.t("Линия") }, { v: "portal", t: Tr.t("Портал") },
+                                { v: "comet", t: Tr.t("Комета") }, { v: "aurora", t: Tr.t("Сияние") }, { v: "burst", t: Tr.t("Лучи") }, { v: "echo", t: Tr.t("Эхо") }]
+                        GTile {
+                            required property var modelData
+                            ui: look; width: 88; height: 32
+                            on: (root.cross.effectIn || "") === modelData.v
+                            onClicked: { root.crossSet("effectIn", modelData.v); root.crossTry("out"); }
+                            Text { anchors.centerIn: parent; text: modelData.t; color: look.text; font.family: look.font; font.pixelSize: 11 }
+                        }
+                    }
+                }
+                Text { text: Tr.t("Когда показывать"); color: look.text; font.family: look.font; font.pixelSize: 13 }
+                Repeater {
+                    model: [{ k: "out", t: Tr.t("Курсор ушёл"), s: Tr.t("на краю, откуда курсор перешёл к соседу") }, { k: "in", t: Tr.t("Курсор пришёл"), s: Tr.t("на краю, куда курсор вернулся или пришёл с соседа") },
+                            { k: "hint", t: Tr.t("Подсказка у края"), s: Tr.t("курсор у края, за которым стоит сосед: слабая вспышка, переход вот-вот начнётся") },
+                            { k: "deny", t: Tr.t("Переход не удался"), s: Tr.t("красный крест: сосед не ответил или не разрешил, нет доступа к вводу") },
+                            { k: "link", t: Tr.t("Сосед появился или пропал"), s: Tr.t("вспышка на его краю при подключении и отключении") }]
+                    GSwitch {
+                        required property var modelData
+                        ui: look; label: modelData.t; sub: modelData.s
+                        checked: root.sceneOn(modelData.k)
+                        onToggled: (v) => root.sceneSet(modelData.k, v)
+                    }
+                }
+                Flow {
+                    width: parent.width; spacing: 8
+                    GButton { ui: look; height: 34; icon: "󰐊"; label: Tr.t("Показать эффект"); onClicked: prevT.restart() }
+                    GButton { ui: look; height: 34; icon: "󰅖"; label: Tr.t("Отказ"); onClicked: root.crossTry("deny") }
+                    GButton { ui: look; height: 34; icon: "󰛨"; label: Tr.t("Подсказка"); onClicked: root.crossTry("hint") }
+                    GButton { ui: look; height: 34; icon: "󰌘"; label: Tr.t("Сосед"); onClicked: root.crossTry("link") }
+                }
             }
         }
 
