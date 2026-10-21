@@ -1,0 +1,23 @@
+# Минимум для NameLess UI: только то, без чего оболочка не работает или теряет основные функции
+quickshell
+qt6-wayland
+qt6-svg
+pipewire
+pipewire-pulse
+wireplumber
+networkmanager
+bluez-utils
+libnotify
+wl-clipboard
+cliphist
+grim
+slurp
+hyprpicker
+playerctl
+brightnessctl
+jq
+python
+curl
+xdg-utils
+kitty
+ttf-jetbrains-mono-nerd

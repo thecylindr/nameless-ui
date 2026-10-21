@@ -2,6 +2,7 @@
 # Установка NameLess UI: оболочка (nameless) и шторка «Оформление» (ThemeDrawer) копируются в ~/.config/quickshell.
 # Прежние файлы не пропадают: они уходят в ~/.config/quickshell-backup-<дата>/.
 #   ./install.sh            поставить
+#   ./install.sh --deps     поставить минимум пакетов из minimal.txt (pacman / AUR через yay) и затем саму оболочку
 #   ./install.sh --restore  вернуть самые свежие прежние файлы
 set -euo pipefail
 
@@ -23,6 +24,15 @@ if [[ "${1:-}" == "--restore" ]]; then
     exit 0
 fi
 
+if [[ "${1:-}" == "--deps" ]]; then
+    mapfile -t pk < <(grep -vE '^\s*(#|$)' "$HERE/minimal.txt")
+    say "ставлю минимум пакетов: ${pk[*]}"
+    for p in "${pk[@]}"; do
+        if pacman -Si "$p" >/dev/null 2>&1; then sudo pacman -S --needed --noconfirm "$p" || echo "  !! не поставился: $p"
+        elif command -v yay >/dev/null; then yay -S --needed --noconfirm "$p" || echo "  !! не поставился: $p"
+        else echo "  !! $p только в AUR, а yay не найден — поставьте вручную"; fi
+    done
+fi
 command -v qs >/dev/null || echo "  !! Quickshell (qs) не найден: поставьте пакет quickshell, иначе оболочка не запустится."
 mkdir -p "$DEST"
 for d in nameless ThemeDrawer; do

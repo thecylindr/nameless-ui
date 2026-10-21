@@ -53,6 +53,13 @@ qs -c nameless &             # the shell
 qs -c ThemeDrawer &          # the appearance drawer
 ```
 
+### Minimal install (another computer, nothing extra)
+
+```bash
+./install.sh --deps      # the minimum packages from minimal.txt (≈ 22) + the shell
+```
+Or just copy the files: `./install.sh`. Optional extras (screen recording, smooth wallpaper changes, GIF, btop) are in `minimal-optional.txt` and installed only if you want them. Drivers, apps, the login screen and your Hyprland configs are not touched.
+
 **Requires:** `quickshell`, Hyprland (or driftwm), PipeWire, a Nerd Font (icons). For specific parts: `cliphist` and `wl-clipboard` (clipboard), `gpu-screen-recorder` or `wf-recorder`, `slurp` and `ffmpeg` (recording), `hyprpicker` (color picker), `playerctl`, `NetworkManager`, `awww` (smooth wallpaper changes).
 
 > **Themes.** Switching templates and palettes is done by the script `~/.config/hypr/Scripts/theme.sh`, which ships with the Hyprland config set ([NameLess UI](https://github.com/thecylindr/nameless-ui)). Without it the shell works, but the Appearance drawer cannot apply templates.

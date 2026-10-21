@@ -53,6 +53,13 @@ qs -c nameless &             # оболочка
 qs -c ThemeDrawer &          # шторка «Оформление»
 ```
 
+### Минимальная установка (другой компьютер, без всего лишнего)
+
+```bash
+./install.sh --deps      # минимум пакетов из minimal.txt (≈ 22 пакета) + оболочка
+```
+Или только копирование файлов: `./install.sh`. Необязательное (запись экрана, обои с плавной сменой, GIF, btop) — в `minimal-optional.txt`, ставится по желанию. Драйверы, приложения, экран входа и ваши конфиги Hyprland не трогаются.
+
 **Нужно:** `quickshell`, Hyprland (или driftwm), PipeWire, шрифт Nerd Font (значки). Для отдельных частей: `cliphist` и `wl-clipboard` (буфер), `gpu-screen-recorder` или `wf-recorder`, `slurp` и `ffmpeg` (запись), `hyprpicker` (пипетка), `playerctl`, `NetworkManager`, `awww` (обои с плавной сменой).
 
 > **Темы.** Переключение шаблонов и палитр делает скрипт `~/.config/hypr/Scripts/theme.sh` — он идёт в наборе конфигов Hyprland ([NameLess UI](https://github.com/thecylindr/nameless-ui)). Без него оболочка работает, но шторка «Оформление» не сможет применять шаблоны.
