@@ -37,14 +37,14 @@
 
 ## 📦 Установка
 
-**Вместе со сборкой glassrice** (рекомендуется): конфиги, шрифты, зависимости и тема ставятся одной командой.
+**Из репозитория** (рекомендуется): установщик сам сохраняет ваши прежние файлы и копирует оболочку.
 
 ```bash
-git clone https://github.com/thecylindr/glassrice.git && cd glassrice
-./install.sh                 # меню; для оболочки достаточно «Оформление целиком»
+git clone https://github.com/thecylindr/nameless-ui.git && cd nameless-ui
+./install.sh                 # копирует nameless и ThemeDrawer в ~/.config/quickshell (прежние — в бэкап)
 ```
 
-**Вручную** — только оболочка:
+**Вручную:**
 
 ```bash
 mkdir -p ~/.config/quickshell
@@ -54,6 +54,8 @@ qs -c ThemeDrawer &          # шторка «Оформление»
 ```
 
 **Нужно:** `quickshell`, Hyprland (или driftwm), PipeWire, шрифт Nerd Font (значки). Для отдельных частей: `cliphist` и `wl-clipboard` (буфер), `gpu-screen-recorder` или `wf-recorder`, `slurp` и `ffmpeg` (запись), `hyprpicker` (пипетка), `playerctl`, `NetworkManager`, `awww` (обои с плавной сменой).
+
+> **Темы.** Переключение шаблонов и палитр делает скрипт `~/.config/hypr/Scripts/theme.sh` — он идёт в наборе конфигов Hyprland ([glassrice](https://github.com/thecylindr/glassrice)). Без него оболочка работает, но шторка «Оформление» не сможет применять шаблоны.
 
 ## ⚙️ Настройка
 
@@ -94,8 +96,8 @@ ThemeDrawer/           шторка «Оформление» (отдельный
 
 - Лог оболочки: `qs -c nameless log`.
 - После правки файла Quickshell перечитывает его сам; ошибки QML видны в логе.
-- Вопросы по сборке — в [FAQ glassrice](https://github.com/thecylindr/glassrice/blob/main/FAQ.md).
+- Нашли ошибку или есть идея — откройте issue в репозитории проекта.
 
 ## 📄 Лицензия
 
-[MIT](https://github.com/thecylindr/glassrice/blob/main/LICENSE).
+[MIT](LICENSE).

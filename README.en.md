@@ -37,14 +37,14 @@
 
 ## 📦 Installation
 
-**With the glassrice build** (recommended): configs, fonts, dependencies and the theme are installed with one command.
+**From the repository** (recommended): the installer saves your previous files and copies the shell.
 
 ```bash
-git clone https://github.com/thecylindr/glassrice.git && cd glassrice
-./install.sh                 # menu; “Whole appearance” is enough for the shell
+git clone https://github.com/thecylindr/nameless-ui.git && cd nameless-ui
+./install.sh                 # copies nameless and ThemeDrawer to ~/.config/quickshell (old ones go to a backup)
 ```
 
-**Manually** — the shell only:
+**Manually:**
 
 ```bash
 mkdir -p ~/.config/quickshell
@@ -54,6 +54,8 @@ qs -c ThemeDrawer &          # the appearance drawer
 ```
 
 **Requires:** `quickshell`, Hyprland (or driftwm), PipeWire, a Nerd Font (icons). For specific parts: `cliphist` and `wl-clipboard` (clipboard), `gpu-screen-recorder` or `wf-recorder`, `slurp` and `ffmpeg` (recording), `hyprpicker` (color picker), `playerctl`, `NetworkManager`, `awww` (smooth wallpaper changes).
+
+> **Themes.** Switching templates and palettes is done by the script `~/.config/hypr/Scripts/theme.sh`, which ships with the Hyprland config set ([glassrice](https://github.com/thecylindr/glassrice)). Without it the shell works, but the Appearance drawer cannot apply templates.
 
 ## ⚙️ Setup
 
@@ -94,8 +96,8 @@ ThemeDrawer/           the appearance drawer (separate process)
 
 - Shell log: `qs -c nameless log`.
 - Quickshell reloads a file as soon as it changes; QML errors appear in the log.
-- Build questions — see the [glassrice FAQ](https://github.com/thecylindr/glassrice/blob/main/FAQ.md).
+- Found a bug or have an idea — open an issue in the project repository.
 
 ## 📄 License
 
-[MIT](https://github.com/thecylindr/glassrice/blob/main/LICENSE).
+[MIT](LICENSE).
