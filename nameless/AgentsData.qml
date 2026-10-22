@@ -21,6 +21,10 @@ Singleton {
 
     property var usage: null          // ответ usage.py
     property string err: ""
+    property var codexStats: null
+    readonly property var codexUsage: codexStats ? codexStats.usage : null
+    readonly property bool codexEnabled: cfg.codexStats !== false
+    readonly property bool needCodex: codexEnabled && (panelOpen || widgetOn)
     property var stats: null
     property bool loading: false
 
@@ -45,7 +49,25 @@ Singleton {
         id: sProc
         stdout: StdioCollector { onStreamFinished: { try { d.stats = JSON.parse(text); } catch (e) { } } }
     }
+    Process {
+        id: cProc
+        stdout: StdioCollector { onStreamFinished: { try { d.codexStats = JSON.parse(text); } catch (e) { } } }
+    }
+    function refreshCodex() {
+        if (codexEnabled && !cProc.running) { cProc.command = ["nice", "-n", "10", "python3", dir + "/codex_stats.py"]; cProc.running = true; }
+    }
+    Timer { interval: 60000; repeat: true; running: d.needCodex; triggeredOnStart: true; onTriggered: d.refreshCodex() }
+    function quotaWindows(u, codex) {
+        if (!u || !u.ok) return [];
+        if (!codex) return [{ t: Tr.t("5 часов"), u: u.five }, { t: Tr.t("Неделя"), u: u.seven }];
+        var result = [];
+        [u.primary, u.secondary].forEach(function (v) {
+            if (v && v.util >= 0) result.push({ t: v.minutes === 10080 ? Tr.t("Неделя") : (v.minutes >= 60 ? Math.round(v.minutes / 60) + Tr.t(" ч") : v.minutes + Tr.t(" мин")), u: v });
+        });
+        return result;
+    }
     function refresh(force) {
+        if (needCodex) refreshCodex();
         if (!enabled) return;
         if (!uProc.running) { loading = true; uProc.command = ["python3", dir + "/usage.py"].concat(force ? ["--force"] : []); uProc.running = true; }
         if (needStats && !sProc.running) { sProc.command = ["nice", "-n", "10", "python3", dir + "/claude_stats.py"]; sProc.running = true; }

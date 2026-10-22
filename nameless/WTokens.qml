@@ -5,7 +5,8 @@ import Quickshell
 // Данные — журналы сессий (claude_stats.py, раз в 2 минуты, разбор инкрементальный). Нажатие — монитор помощников
 WCard {
     id: w
-    readonly property var st: AgentsData.stats
+    readonly property bool codex: Config.store.tokens.provider === "codex"
+    readonly property var st: codex ? AgentsData.codexStats : AgentsData.stats
     readonly property var colors: ({ opus: "#b57bff", sonnet: "#4da3ff", haiku: "#34c759", fable: "#ff7a59" })
     readonly property bool compact: (Config.store.tokens.view || "chart") === "numbers"
     implicitHeight: pad * 2 + 22 + 8 + 46 + (compact ? 0 : 108)
@@ -14,12 +15,12 @@ WCard {
         id: head
         spacing: 8
         Text { text: "󰆼"; color: Theme.accent; font.family: Theme.iconFont; font.pixelSize: 14 }
-        Text { text: Tr.t("Расход токенов"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.6 }
+        Text { text: Tr.t("Расход токенов") + (w.codex ? " · Codex" : " · Claude"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.6 }
     }
     Text {
         visible: w.st === null
         anchors { top: head.bottom; topMargin: 10 }
-        text: !AgentsData.enabled ? Tr.t("Выключено: Функции → «Лимиты Claude»") : Tr.t("Считаю по журналам…")
+        text: !(w.codex ? AgentsData.codexEnabled : AgentsData.enabled) ? Tr.t("Выключено: Функции → «Лимиты Claude»") : Tr.t("Считаю по журналам…")
         color: Theme.sub; font.family: Theme.font; font.pixelSize: 12
     }
     Row {

@@ -26,7 +26,7 @@ Singleton {
         photo:    { name: "Фоторамка",   icon: "󰋩", about: "слайд-шоу из папки с картинками" },
         updates:  { name: "Обновления",  icon: "󰚰", about: "сколько пакетов ждёт обновления" },
         countdown:{ name: "Отсчёт",      icon: "󰔟", about: "сколько дней осталось до даты" },
-        claude:   { name: "Лимиты Claude", icon: "󰚩", about: "окно 5 часов и неделя кольцами, сброс и прогноз исчерпания" },
+        claude:   { name: "Лимиты помощника", icon: "󰚩", about: "окно 5 часов и неделя кольцами, сброс и прогноз исчерпания" },
         tokens:   { name: "Расход токенов", icon: "󰆼", about: "токены за сегодня, неделю и 5 часов, столбики по дням и моделям" },
         orbit:    { name: "Устройства",  icon: "󰟀", about: "NameLess Orbit: подключённые устройства, заряд, «найти», буфер обмена" },
         touch:    { name: "Сенсорная панель", icon: "󰟸", about: "тачпад: точки на месте пальцев и клики своим цветом (левая, правая, средняя), как touchview" },
@@ -100,11 +100,11 @@ Singleton {
         orbit: { enabled: true, bar: true, dock: true, indock: false, autostart: true, claude: true, claudeMin: 20 },   // claude — сообщать на устройства, что Claude закончил работу; claudeMin — не короче стольких секунд             // верхний док устройств; запуск Orbit в фоне, когда он нужен
         // переход курсора между компьютерами (Orbit): links — [{ device, name, side }], side — край этого экрана (left|right|top|bottom|off);
         // effect — glow | ripple | sparks | line | portal | none; color — accent | accent2 | white | #RRGGBB; delay — задержка на краю, мс
-        crossing: { enabled: false, effect: "auto", effectOut: "", effectIn: "", color: "accent", duration: 700, intensity: 1.0, delay: 120, links: [], scenes: { out: true, in: true, deny: true, link: true, hint: true } },
+        crossing: { enabled: false, monitors: true, effect: "auto", motion: "smooth", bloom: true, particles: true, reducedMotion: false, portalDepth: 1.0, effectOut: "", effectIn: "", color: "accent", duration: 700, intensity: 1.0, delay: 120, links: [], scenes: { out: true, in: true, deny: true, link: true, hint: true } },
         touchpad: { left: "", right: "", middle: "", dot: "", dotSize: 9 },        // цвета — имя цвета темы (accent, red, green…) или #RRGGBB; пусто — по умолчанию
-        claude: { view: "rings" },                          // rings | bars
-        tokens: { view: "chart" },                          // chart | numbers
-        agents: { ask: "claude", last: true, quota: true, bar: false },   // кого спрашивать; последнее сообщение; лимиты Claude (запрос с токеном Claude Code); лимит в баре
+        claude: { view: "rings", provider: "claude" },                          // rings | bars
+        tokens: { view: "chart", provider: "claude" },                          // chart | numbers
+        agents: { ask: "claude", last: true, quota: true, codexStats: true, statsProvider: "claude", bar: false },   // кого спрашивать; последнее сообщение; лимиты Claude (запрос с токеном Claude Code); лимит в баре
         lock: {
             style: "theme",     // theme — по комплекту темы | ios | glass | aurora | terminal | minimal
             notifs: true,       // уведомления на экране блокировки

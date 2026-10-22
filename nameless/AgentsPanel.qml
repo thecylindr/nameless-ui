@@ -37,8 +37,10 @@ PanelWindow {
     Timer { interval: 3000; repeat: true; running: w.open; onTriggered: if (!poll.running) poll.running = true }
     Timer { interval: 1000; repeat: true; running: w.open; onTriggered: w.tick++ }
     property int tick: 0
-    readonly property var u: AgentsData.usage
-    readonly property var st: AgentsData.stats
+    readonly property bool codex: Config.store.agents.statsProvider === "codex"
+    readonly property bool dataEnabled: codex ? AgentsData.codexEnabled : AgentsData.enabled
+    readonly property var u: codex ? AgentsData.codexUsage : AgentsData.usage
+    readonly property var st: codex ? AgentsData.codexStats : AgentsData.stats
     readonly property var modelColors: ({ opus: "#b57bff", sonnet: "#4da3ff", haiku: "#34c759", fable: "#ff7a59" })
 
     Rectangle { anchors.fill: parent; color: "black"; opacity: Theme.dimAlpha * w.progress }
@@ -69,7 +71,7 @@ PanelWindow {
                 Column {
                     anchors.verticalCenter: parent.verticalCenter
                     Text { text: Tr.t("Помощники"); color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Bold }
-                    Text { text: "Claude Code" + (w.u && w.u.plan ? Tr.t(" · план ") + w.u.plan : "") + (w.u && w.u.ok ? Tr.t(" · данные ") + w.u.age + Tr.t(" с назад") : ""); color: Theme.sub; font.family: Theme.font; font.pixelSize: 10 }
+                    Text { text: (w.codex ? "Codex" : "Claude Code") + (w.u && w.u.plan ? Tr.t(" · план ") + w.u.plan : "") + (w.u && w.u.ok ? Tr.t(" · данные ") + w.u.age + Tr.t(" с назад") : ""); color: Theme.sub; font.family: Theme.font; font.pixelSize: 10 }
                 }
             }
             Row {
@@ -89,54 +91,69 @@ PanelWindow {
                 width: parent.width
                 spacing: 12
 
+                GSegment {
+                    ui: Theme
+                    options: [{ v: "claude", t: "Claude Code" }, { v: "codex", t: "Codex" }]
+                    value: w.codex ? "codex" : "claude"
+                    onPicked: v => { Config.set("agents.statsProvider", v); AgentsData.refresh(false); }
+                }
+
                 // ---------- лимиты ----------
                 Card {
                     title: Tr.t("Лимиты")
                     Text {
-                        visible: !AgentsData.enabled
+                        visible: !w.dataEnabled
                         width: parent.width; wrapMode: Text.WordWrap
-                        text: Tr.t("Запросы лимитов выключены (Функции → «Лимиты Claude»).")
+                        text: w.codex ? Tr.t("Статистика Codex выключена в разделе «Функции».") : Tr.t("Запросы лимитов выключены (Функции → «Лимиты Claude»).")
                         color: Theme.sub; font.family: Theme.font; font.pixelSize: 12
                     }
                     Text {
-                        visible: AgentsData.enabled && (!w.u || !w.u.ok)
+                        visible: w.dataEnabled && (!w.u || !w.u.ok)
                         width: parent.width; wrapMode: Text.WordWrap
-                        text: AgentsData.loading ? Tr.t("Получаю данные…") : (AgentsData.err !== "" ? AgentsData.errText(AgentsData.err) : Tr.t("Нет данных"))
+                        text: w.codex ? Tr.t("Лимиты появятся после запроса в Codex. Данные читаются из локального журнала.") : (AgentsData.loading ? Tr.t("Получаю данные…") : (AgentsData.err !== "" ? AgentsData.errText(AgentsData.err) : Tr.t("Нет данных")))
                         color: Theme.yellow; font.family: Theme.font; font.pixelSize: 12
                     }
                     Meter {
-                        visible: w.u && w.u.ok
+                        visible: !w.codex && w.u && w.u.ok
                         label: Tr.t("Окно 5 часов"); value: w.u && w.u.ok ? w.u.five.util : 0
                         note: w.u && w.u.ok ? Tr.t("сброс через ") + AgentsData.left(w.u.five.resets) + " · " + AgentsData.clock(w.u.five.resets) + (w.tick >= 0 ? "" : "") : ""
                     }
                     Text {
-                        visible: w.u && w.u.ok
+                        visible: !w.codex && w.u && w.u.ok
                         width: parent.width; wrapMode: Text.WordWrap
                         text: !w.u || !w.u.ok ? "" : (w.u.eta ? Tr.t("При текущем темпе окно исчерпается через ") + AgentsData.etaText(w.u.eta) + Tr.t(" — раньше сброса.") : Tr.t("Темп безопасный: до сброса лимит не исчерпается."))
                         color: w.u && w.u.eta ? Theme.red : Theme.sub; font.family: Theme.font; font.pixelSize: 11
                     }
                     Meter {
-                        visible: w.u && w.u.ok
+                        visible: !w.codex && w.u && w.u.ok
                         label: Tr.t("Неделя"); value: w.u && w.u.ok ? w.u.seven.util : 0
                         note: w.u && w.u.ok ? Tr.t("сброс через ") + AgentsData.left(w.u.seven.resets) + " · " + AgentsData.clock(w.u.seven.resets) : ""
                     }
-                    Meter { visible: w.u && w.u.ok && w.u.sonnet !== null; label: Tr.t("Неделя · Sonnet"); value: w.u && w.u.sonnet ? w.u.sonnet.util || 0 : 0; note: "" }
-                    Meter { visible: w.u && w.u.ok && w.u.opus !== null; label: Tr.t("Неделя · Opus"); value: w.u && w.u.opus ? w.u.opus.util || 0 : 0; note: "" }
+                    Meter { visible: !w.codex && w.u && w.u.ok && w.u.sonnet !== null; label: Tr.t("Неделя · Sonnet"); value: w.u && w.u.sonnet ? w.u.sonnet.util || 0 : 0; note: "" }
+                    Meter { visible: !w.codex && w.u && w.u.ok && w.u.opus !== null; label: Tr.t("Неделя · Opus"); value: w.u && w.u.opus ? w.u.opus.util || 0 : 0; note: "" }
+                    Repeater {
+                        model: w.codex && w.dataEnabled ? AgentsData.quotaWindows(w.u, true) : []
+                        Meter {
+                            required property var modelData
+                            label: modelData.t; value: modelData.u.util
+                            note: modelData.u.resets > 0 ? Tr.t("сброс через ") + AgentsData.left(modelData.u.resets) : ""
+                        }
+                    }
                     // ход окна за последние замеры
                     Graph {
-                        visible: w.u && w.u.ok && w.u.hist && w.u.hist.length > 2
+                        visible: !w.codex && w.u && w.u.ok && w.u.hist && w.u.hist.length > 2
                         width: parent.width; height: 60
                         maxValue: 100
                         series: [{ values: w.u && w.u.hist ? w.u.hist.map(function (h) { return h[1]; }) : [], color: Theme.accent }]
                     }
                     Text {
-                        visible: AgentsData.err !== "" && w.u && w.u.ok
+                        visible: !w.codex && AgentsData.err !== "" && w.u && w.u.ok
                         width: parent.width; wrapMode: Text.WordWrap
                         text: AgentsData.errText(AgentsData.err); color: Theme.yellow; font.family: Theme.font; font.pixelSize: 11
                     }
                     Text {
                         width: parent.width; wrapMode: Text.WordWrap
-                        text: Tr.t("Лимиты общие для Claude.ai, Claude Code и приложения. Запрос идёт с токеном Claude Code, сам токен нигде не сохраняется; отключается в «Функции».")
+                        text: w.codex ? Tr.t("Снимок лимитов из журнала Codex, без сетевых запросов. Обновляется при работе Codex; время снимка указано сверху.") : Tr.t("Лимиты общие для Claude.ai, Claude Code и приложения. Запрос идёт с токеном Claude Code, сам токен нигде не сохраняется; отключается в «Функции».")
                         color: Theme.sub; font.family: Theme.font; font.pixelSize: 10; opacity: 0.8
                     }
                 }
@@ -147,9 +164,15 @@ PanelWindow {
                     Row {
                         width: parent.width
                         spacing: 8
-                        Stat { width: (parent.width - 16) / 3; label: Tr.t("Сегодня"); value: w.st ? AgentsData.tok(w.st.today.tokens) : "…"; sub: w.st ? w.st.today.msgs + Tr.t(" ответов") : "" }
-                        Stat { width: (parent.width - 16) / 3; label: Tr.t("7 дней"); value: w.st ? AgentsData.tok(w.st.week.tokens) : "…"; sub: w.st ? w.st.week.msgs + Tr.t(" ответов") : "" }
-                        Stat { width: (parent.width - 16) / 3; label: Tr.t("Последние 5 часов"); value: w.st ? AgentsData.tok(w.st.block5h.tokens) : "…"; sub: w.st && w.u && w.u.ok && w.u.five.util > 1 ? "≈ " + AgentsData.tok(w.st.block5h.tokens / w.u.five.util) + Tr.t(" на 1 %") : "" }
+                        Stat { width: (parent.width - 16) / 3; label: Tr.t("Сегодня"); value: w.st ? AgentsData.tok(w.st.today.tokens) : "…"; sub: w.st ? w.st.today.msgs + (w.codex ? Tr.t(" запросов модели") : Tr.t(" ответов")) : "" }
+                        Stat { width: (parent.width - 16) / 3; label: Tr.t("7 дней"); value: w.st ? AgentsData.tok(w.st.week.tokens) : "…"; sub: w.st ? w.st.week.msgs + (w.codex ? Tr.t(" запросов модели") : Tr.t(" ответов")) : "" }
+                        Stat { width: (parent.width - 16) / 3; label: Tr.t("Последние 5 часов"); value: w.st ? AgentsData.tok(w.st.block5h.tokens) : "…"; sub: !w.codex && w.st && w.u && w.u.ok && w.u.five.util > 1 ? "≈ " + AgentsData.tok(w.st.block5h.tokens / w.u.five.util) + Tr.t(" на 1 %") : "" }
+                    }
+                    Row {
+                        visible: w.codex && w.st !== null
+                        width: parent.width; spacing: 8
+                        Stat { width: (parent.width - 8) / 2; label: Tr.t("Из кеша · 5 часов"); value: w.st ? AgentsData.tok(w.st.block5h.cacheRead) : "…"; sub: Tr.t("уже учтено во входе") }
+                        Stat { width: (parent.width - 8) / 2; label: Tr.t("Reasoning · 5 часов"); value: w.st ? AgentsData.tok(w.st.block5h.reasoning) : "…"; sub: Tr.t("уже учтено в выходе") }
                     }
                     // по дням: столбики, цвета — модели
                     Row {
@@ -200,7 +223,7 @@ PanelWindow {
                             Text { width: 90; horizontalAlignment: Text.AlignRight; text: AgentsData.tok(modelData[1]); color: Theme.sub; font.family: Theme.font; font.pixelSize: 12 }
                         }
                     }
-                    Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("Считаются вход, выход и запись кеша; чтение кеша дёшево и квоту почти не тратит."); color: Theme.sub; font.family: Theme.font; font.pixelSize: 10; opacity: 0.8 }
+                    Text { width: parent.width; wrapMode: Text.WordWrap; text: w.codex ? Tr.t("Вход и выход по журналам Codex. Кеш и reasoning уже входят в итог; это расход токенов, а не процент квоты.") : Tr.t("Считаются вход, выход и запись кеша; чтение кеша дёшево и квоту почти не тратит."); color: Theme.sub; font.family: Theme.font; font.pixelSize: 10; opacity: 0.8 }
                 }
 
                 // ---------- сессии ----------

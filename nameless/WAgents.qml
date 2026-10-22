@@ -78,8 +78,9 @@ WCard {
     function cancel() { if (ask.running) ask.signal(15); }
     function copy() { Quickshell.execDetached(["sh", "-c", "printf '%s' \"$1\" | wl-copy", "sh", answer]); }
 
+    readonly property real codexH: AgentsData.codexEnabled && AgentsData.codexStats ? 24 : 0
     readonly property real quotaH: !AgentsData.enabled ? 0 : (AgentsData.usage && AgentsData.usage.ok ? 40 : (AgentsData.err !== "" ? 16 : 0))
-    implicitHeight: pad * 2 + 30 + quotaH + (quotaH > 0 ? 8 : 0) + (shown.length ? shown.length * 54 : 56) + 12 + 38 + (asking || answer !== "" || askErr !== "" ? ansBox.height + 8 : 0)
+    implicitHeight: pad * 2 + 30 + quotaH + codexH + (quotaH > 0 ? 8 : 0) + (shown.length ? shown.length * 54 : 56) + 12 + 38 + (asking || answer !== "" || askErr !== "" ? ansBox.height + 8 : 0)
 
     // ---------- шапка ----------
     Row {
@@ -99,7 +100,7 @@ WCard {
     Item {
         id: quota
         anchors { top: head.bottom; topMargin: 8 }
-        width: parent.width; height: w.quotaH
+        width: parent.width; height: w.quotaH + w.codexH
         visible: height > 0
         Row {
             visible: AgentsData.usage !== null && AgentsData.usage.ok
@@ -118,6 +119,11 @@ WCard {
             }
         }
         Text { visible: !(AgentsData.usage && AgentsData.usage.ok) && AgentsData.err !== ""; text: Tr.t("󰖪 лимиты: ") + AgentsData.errText(AgentsData.err); color: Theme.yellow; font.family: Theme.iconFont; font.pixelSize: 10; elide: Text.ElideRight; width: parent.width }
+        Text {
+            y: w.quotaH; visible: w.codexH > 0; width: parent.width; elide: Text.ElideRight
+            text: "Codex · " + Tr.t("сегодня ") + AgentsData.tok(AgentsData.codexStats ? AgentsData.codexStats.today.tokens : 0) + (AgentsData.codexUsage && AgentsData.codexUsage.primary ? " · " + Math.round(AgentsData.codexUsage.primary.util) + "%" : "")
+            color: Theme.sub; font.family: Theme.font; font.pixelSize: 10
+        }
         MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "agents", "toggle"]) }
     }
 

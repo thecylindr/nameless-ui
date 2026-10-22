@@ -56,6 +56,18 @@ ShellRoot {
     Timer { id: placeT; property bool reset: false; interval: 450; onTriggered: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "autoplace", reset ? "true" : "false"]) }
     function sceneOn(k) { return !cross.scenes || cross.scenes[k] !== false; }
     function sceneSet(k, v) { var n = Object.assign({ out: true, in: true, deny: true, link: true, hint: true }, cross.scenes || {}); n[k] = v; crossSet("scenes", n); }
+    function crossPreset(name) {
+        var presets = {
+            quiet: { effect: "glow", duration: 450, intensity: 0.65, bloom: false, particles: false, motion: "smooth", reducedMotion: false, portalDepth: 0.75 },
+            balanced: { effect: "portal", duration: 700, intensity: 1, bloom: true, particles: true, motion: "smooth", reducedMotion: false, portalDepth: 1 },
+            vivid: { effect: "portal", duration: 1100, intensity: 1.35, bloom: true, particles: true, motion: "snappy", reducedMotion: false, portalDepth: 1.3 }
+        };
+        var p = presets[name];
+        if (!p) return;
+        root.crossSet("effectOut", ""); root.crossSet("effectIn", "");
+        Object.keys(p).forEach(function (key) { root.crossSet(key, p[key]); });
+        root.crossTry("out");
+    }
     function crossTry(scene) { sceneT.scene = scene; sceneT.restart(); }
     Timer { id: sceneT; property string scene: "out"; interval: 350; onTriggered: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "preview", scene]) }
     function sideOf(dev) { var l = asList(cross.links); for (var i = 0; i < l.length; i++) if (l[i].device === dev) return l[i].side; return "off"; }
@@ -1186,6 +1198,12 @@ ShellRoot {
                     checked: root.cross.enabled === true
                     onToggled: (v) => { root.crossSet("enabled", v); if (v) root.crossPlace(false); }
                 }
+                GSwitch {
+                    ui: look; label: Tr.t("Эффект перехода между мониторами")
+                    sub: Tr.t("курсор ушёл на другой монитор этого компьютера или на второй экран Orbit — уход и приход на их краях; работает и без Orbit")
+                    checked: root.cross.monitors !== false
+                    onToggled: (v) => root.crossSet("monitors", v)
+                }
                 Text {
                     width: parent.width; wrapMode: Text.WordWrap
                     text: !root.orbitUp ? Tr.t("Orbit не запущен: соседи появятся, когда он будет на связи") : (root.crossPeers.length === 0 ? Tr.t("Нет подключённых компьютеров. На соседнем должен быть свежий Orbit и разрешена «Демонстрация экрана» для этого компьютера") : Tr.t("Где стоит каждый сосед относительно этого экрана:"))
@@ -1216,7 +1234,23 @@ ShellRoot {
             }
 
             GSection {
-                ui: look; title: Tr.t("Эффект на краях")
+                ui: look; title: Tr.t("Анимации перехода")
+                Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("Оформление → Курсор. Анимация сопровождает переход между мониторами и устройствами Orbit; ввод она не задерживает."); color: look.sub; font.family: look.font; font.pixelSize: 12 }
+                Flow {
+                    width: parent.width; spacing: 8
+                    GButton { ui: look; label: Tr.t("Спокойно"); onClicked: root.crossPreset("quiet") }
+                    GButton { ui: look; label: Tr.t("Сбалансированно"); onClicked: root.crossPreset("balanced") }
+                    GButton { ui: look; label: Tr.t("Выразительно"); onClicked: root.crossPreset("vivid") }
+                }
+                GSwitch { ui: look; label: Tr.t("Меньше движения"); sub: Tr.t("короткая неподвижная подсветка края без свечения и частиц"); checked: root.cross.reducedMotion === true; onToggled: v => { root.crossSet("reducedMotion", v); root.crossTry("out"); } }
+                Text { text: Tr.t("Проверить край"); color: look.text; font.family: look.font; font.pixelSize: 13 }
+                Flow {
+                    width: parent.width; spacing: 8
+                    Repeater {
+                        model: [{ s: "left", t: "←" }, { s: "top", t: "↑" }, { s: "bottom", t: "↓" }, { s: "right", t: "→" }]
+                        GButton { required property var modelData; ui: look; label: modelData.t; onClicked: root.crossTry("out:" + modelData.s) }
+                    }
+                }
                 Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("где курсор ушёл и где пришёл — на обоих компьютерах. «Авто» подбирает эффект по случаю: комета при уходе, эхо при приходе, тише на полном экране, при записи и на низком заряде. Этот выбор — общий; ниже можно задать отдельный эффект для ухода и для прихода"); color: look.sub; font.family: look.font; font.pixelSize: 12 }
                 Flow {
                     width: parent.width
@@ -1242,6 +1276,20 @@ ShellRoot {
                 }
                 // показ после выбора: ipc доходит до NameLess раньше, чем он применит значение, поэтому — с задержкой
                 Timer { id: prevT; interval: 350; onTriggered: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "preview", "out"]) }
+                GSegment {
+                    ui: look
+                    options: [{ v: "smooth", t: Tr.t("Плавно") }, { v: "snappy", t: Tr.t("Быстрое начало") }, { v: "linear", t: Tr.t("Равномерно") }]
+                    value: root.cross.motion || "smooth"
+                    onPicked: v => { root.crossSet("motion", v); prevT.restart(); }
+                }
+                GSwitch { ui: look; label: Tr.t("Мягкое свечение"); sub: Tr.t("автоматически приглушается при записи и экономии энергии"); checked: root.cross.bloom !== false; onToggled: v => { root.crossSet("bloom", v); prevT.restart(); } }
+                GSwitch { ui: look; label: Tr.t("Частицы портала"); checked: root.cross.particles !== false; onToggled: v => { root.crossSet("particles", v); prevT.restart(); } }
+                PillSlider {
+                    ui: look; width: parent.width; icon: "󰕰"; label: Tr.t("Глубина портала")
+                    from: 0.5; to: 1.5; stepSize: 0.05; decimals: 2
+                    value: root.cross.portalDepth || 1
+                    onCommitted: v => { root.crossSet("portalDepth", v); prevT.restart(); }
+                }
                 Text { text: Tr.t("Цвет"); color: look.text; font.family: look.font; font.pixelSize: 13 }
                 GSegment {
                     ui: look

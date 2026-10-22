@@ -15,13 +15,18 @@ Item {
     property color tint: "white"
     property int duration: 700
     property real k: 1.0                  // сила (размер и яркость)
+    property bool reducedMotion: false
+    property bool bloom: true
+    property bool particles: true
+    property real portalDepth: 1.0
+    property string motion: "smooth"
     signal finished
 
     property real t: 0
-    NumberAnimation on t { from: 0; to: 1; duration: fx.duration; easing.type: Easing.Linear; onFinished: fx.finished() }
-    readonly property real ease: 1 - Math.pow(1 - t, 3)              // быстрое начало, мягкий конец
-    readonly property real easeQ: 1 - Math.pow(1 - t, 5)             // ещё резче: волны и искры
-    readonly property real bell: Math.sin(Math.PI * Math.min(1, t * 1.15))   // вспыхнуть и погаснуть (чуть раньше конца)
+    NumberAnimation on t { from: 0; to: 1; duration: fx.duration; easing.type: fx.motion === "linear" ? Easing.Linear : (fx.motion === "snappy" ? Easing.OutCubic : Easing.InOutSine); onFinished: fx.finished() }
+    readonly property real ease: reducedMotion ? 1 : (motion === "linear" ? t : 1 - Math.pow(1 - t, motion === "snappy" ? 5 : 3))              // быстрое начало, мягкий конец
+    readonly property real easeQ: reducedMotion ? 1 : (motion === "linear" ? t : 1 - Math.pow(1 - t, 5))             // ещё резче: волны и искры
+    readonly property real bell: Math.max(0, Math.sin(Math.PI * t))   // вспыхнуть и погаснуть (чуть раньше конца)
     readonly property real fade: 1 - t * t                            // плавное угасание
     readonly property color hot: Qt.lighter(tint, 1.6)                // ядро — светлее основного цвета
     readonly property real span: 520 * k                              // половина стороны слоя эффекта
@@ -44,10 +49,12 @@ Item {
             // ореол: та же картинка, размытая и подсвеченная
             Loader {
                 anchors.fill: parent
+                active: fx.bloom && !fx.reducedMotion && fx.GraphicsInfo.api !== GraphicsInfo.Software
+                visible: active
                 sourceComponent: art
                 onLoaded: item.halo = true
                 opacity: 0.95
-                layer.enabled: true
+                layer.enabled: active
                 layer.effect: MultiEffect { blurEnabled: true; blur: 1.0; blurMax: 56; blurMultiplier: 0.6; brightness: 0.2; saturation: 0.25 }
             }
             // ядро: чёткая картинка поверх ореола
@@ -195,54 +202,58 @@ Item {
                 }
             }
 
-            // ---------- портал: вращающиеся пунктирные овалы и светящаяся сердцевина ----------
-            Shape {
+            // ---------- портал: непрерывный обод, встречные дуги, глубина и поток частиц ----------
+            Item {
                 id: portal
                 visible: fx.kind === "portal"
                 anchors.fill: parent
-                preferredRendererType: Shape.CurveRenderer
-                readonly property real open: fx.dir === "in" ? fx.easeQ : 1 - fx.easeQ * 0.7
-                readonly property real a0: fx.bell
-                ShapePath {
-                    strokeWidth: 0
-                    strokeColor: "transparent"
-                    fillGradient: RadialGradient {
-                        centerX: fx.span; centerY: fx.span; centerRadius: 140 * fx.k
-                        focalX: fx.span; focalY: fx.span
-                        GradientStop { position: 0; color: Qt.rgba(1, 1, 1, 0.9 * fx.bell) }
-                        GradientStop { position: 0.35; color: Qt.rgba(fx.tint.r, fx.tint.g, fx.tint.b, 0.6 * fx.bell) }
-                        GradientStop { position: 1; color: "transparent" }
+                readonly property real aperture: Math.pow(Math.max(0, Math.sin(Math.PI * fx.t)), 0.65)
+                readonly property real rx: (42 + 20 * fx.portalDepth) * fx.k * (0.55 + 0.45 * aperture)
+                readonly property real ry: (135 + 35 * fx.portalDepth) * fx.k * (0.5 + 0.5 * aperture)
+                readonly property real phase: (fx.dir === "in" ? 1 : -1) * fx.t * 150
+                Shape {
+                    anchors.fill: parent
+                    preferredRendererType: Shape.CurveRenderer
+                    opacity: fx.bell
+                    ShapePath {
+                        strokeWidth: 0
+                        fillGradient: RadialGradient {
+                            centerX: artRoot.cx; centerY: artRoot.cy; centerRadius: 185 * fx.k
+                            focalX: artRoot.cx; focalY: artRoot.cy
+                            GradientStop { position: 0; color: Qt.rgba(fx.tint.r * 0.12, fx.tint.g * 0.12, fx.tint.b * 0.12, artRoot.halo ? 0.55 : 0.22) }
+                            GradientStop { position: 0.65; color: Qt.rgba(fx.tint.r, fx.tint.g, fx.tint.b, artRoot.halo ? 0.4 : 0.12) }
+                            GradientStop { position: 1; color: "transparent" }
+                        }
+                        PathAngleArc { centerX: artRoot.cx; centerY: artRoot.cy; radiusX: portal.rx; radiusY: portal.ry; startAngle: 0; sweepAngle: 360 }
                     }
-                    PathAngleArc { centerX: fx.span; centerY: fx.span; radiusX: 70 * fx.k; radiusY: 190 * fx.k * (0.4 + 0.6 * portal.open); startAngle: 0; sweepAngle: 360 }
+                    ShapePath {
+                        strokeWidth: (artRoot.halo ? 7 : 2.3) * fx.k
+                        strokeColor: fx.hot; fillColor: "transparent"
+                        PathAngleArc { centerX: artRoot.cx; centerY: artRoot.cy; radiusX: portal.rx; radiusY: portal.ry; startAngle: 0; sweepAngle: 360 }
+                    }
+                    ShapePath {
+                        strokeWidth: 1.3 * fx.k
+                        strokeColor: Qt.rgba(fx.tint.r, fx.tint.g, fx.tint.b, 0.65); fillColor: "transparent"
+                        PathAngleArc { centerX: artRoot.cx; centerY: artRoot.cy; radiusX: portal.rx * 1.24; radiusY: portal.ry * 1.12; startAngle: portal.phase; sweepAngle: 125 }
+                    }
+                    ShapePath {
+                        strokeWidth: 2 * fx.k; capStyle: ShapePath.RoundCap
+                        strokeColor: fx.hot; fillColor: "transparent"
+                        PathAngleArc { centerX: artRoot.cx; centerY: artRoot.cy; radiusX: portal.rx * 0.83; radiusY: portal.ry * 0.9; startAngle: 200 - portal.phase; sweepAngle: 100 }
+                    }
                 }
-                ShapePath {
-                    strokeWidth: 3 * fx.k
-                    strokeColor: Qt.rgba(fx.hot.r, fx.hot.g, fx.hot.b, fx.bell)
-                    fillColor: "transparent"
-                    strokeStyle: ShapePath.DashLine
-                    dashPattern: [3, 2.5]
-                    dashOffset: fx.t * 22
-                    capStyle: ShapePath.RoundCap
-                    PathAngleArc { centerX: fx.span; centerY: fx.span; radiusX: 46 * fx.k; radiusY: 150 * fx.k * (0.4 + 0.6 * portal.open); startAngle: 0; sweepAngle: 360 }
-                }
-                ShapePath {
-                    strokeWidth: 2 * fx.k
-                    strokeColor: Qt.rgba(fx.tint.r, fx.tint.g, fx.tint.b, fx.bell * 0.85)
-                    fillColor: "transparent"
-                    strokeStyle: ShapePath.DashLine
-                    dashPattern: [6, 4]
-                    dashOffset: -fx.t * 30
-                    capStyle: ShapePath.RoundCap
-                    PathAngleArc { centerX: fx.span; centerY: fx.span; radiusX: 78 * fx.k; radiusY: 230 * fx.k * (0.4 + 0.6 * portal.open); startAngle: 0; sweepAngle: 360 }
-                }
-                ShapePath {
-                    strokeWidth: 1.5 * fx.k
-                    strokeColor: Qt.rgba(fx.tint.r, fx.tint.g, fx.tint.b, fx.bell * 0.5)
-                    fillColor: "transparent"
-                    strokeStyle: ShapePath.DashLine
-                    dashPattern: [2, 6]
-                    dashOffset: fx.t * 40
-                    PathAngleArc { centerX: fx.span; centerY: fx.span; radiusX: 110 * fx.k; radiusY: 300 * fx.k * (0.4 + 0.6 * portal.open); startAngle: 0; sweepAngle: 360 }
+                Repeater {
+                    model: fx.kind === "portal" && fx.particles && !artRoot.halo ? 12 : 0
+                    Rectangle {
+                        required property int index
+                        readonly property real seed: ((index * 37) % 101) / 101
+                        readonly property real travel: fx.dir === "in" ? fx.ease : 1 - fx.ease
+                        x: artRoot.cx + (18 + travel * (75 + 90 * seed)) * fx.k * fx.portalDepth
+                        y: artRoot.cy + (seed - 0.5) * portal.ry * 1.6 * (1 - 0.5 * travel)
+                        width: (2 + seed * 2) * fx.k; height: width; radius: width / 2
+                        color: index % 3 === 0 ? fx.hot : fx.tint
+                        opacity: fx.bell * (0.25 + seed * 0.55)
+                    }
                 }
             }
 

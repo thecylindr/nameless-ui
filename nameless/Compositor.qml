@@ -53,8 +53,10 @@ Singleton {
     function focusWorkspace(id) {
         if (hyprland) Hyprland.dispatch("hl.dsp.focus({ workspace = " + id + " })");
     }
+    // шаг по столам своего монитора («m»): «e» шёл по столам всех мониторов и по пути заскакивал на стол виртуального монитора второго экрана —
+    // фокус и курсор улетали на невидимый экран, а следующий стол открывался уже на нём и вытеснял показ
     function stepWorkspace(dir) {
-        if (hyprland) Hyprland.dispatch("hl.dsp.focus({ workspace = \"e" + (dir > 0 ? "+1" : "-1") + "\" })");
+        if (hyprland) Hyprland.dispatch("hl.dsp.focus({ workspace = \"m" + (dir > 0 ? "+1" : "-1") + "\" })");
     }
     function logout() {
         if (hyprland) Hyprland.dispatch("hl.dsp.exit()");

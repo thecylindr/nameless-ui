@@ -278,6 +278,7 @@ PanelWindow {
                             Column {
                                 visible: opts.t === "claude" || opts.t === "tokens"
                                 width: parent.width; spacing: 10
+                                Labeled { label: Tr.t("Помощник"); GSegment { ui: Theme; options: [{ v: "claude", t: "Claude" }, { v: "codex", t: "Codex" }]; value: (opts.t === "tokens" ? Config.store.tokens.provider : Config.store.claude.provider) || "claude"; onPicked: v => Config.set(opts.t + ".provider", v) } }
                                 Labeled { visible: opts.t === "claude"; label: Tr.t("Вид"); GSegment { ui: Theme; options: [{ v: "rings", t: Tr.t("Кольца") }, { v: "bars", t: Tr.t("Полосы") }]; value: Config.store.claude.view || "rings"; onPicked: (v) => Config.set("claude.view", v) } }
                                 Labeled { visible: opts.t === "tokens"; label: Tr.t("Вид"); GSegment { ui: Theme; options: [{ v: "chart", t: Tr.t("График") }, { v: "numbers", t: Tr.t("Только числа") }]; value: Config.store.tokens.view || "chart"; onPicked: (v) => Config.set("tokens.view", v) } }
                                 GSwitch { ui: Theme; label: Tr.t("Запрашивать лимиты"); sub: Tr.t("раз в 2 минуты, с токеном Claude Code (он не сохраняется)"); checked: Config.store.agents.quota !== false; onToggled: (v) => Config.set("agents.quota", v) }

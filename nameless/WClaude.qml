@@ -6,16 +6,18 @@ import Quickshell
 // Данные — AgentsData (usage.py, раз в 2 минуты; выключается в «Функции» → «Лимиты Claude»)
 WCard {
     id: w
-    readonly property var u: AgentsData.usage
-    readonly property bool ok: u !== null && u.ok === true
+    readonly property bool codex: Config.store.claude.provider === "codex"
+    readonly property bool enabledData: codex ? AgentsData.codexEnabled : AgentsData.enabled
+    readonly property var u: codex ? AgentsData.codexUsage : AgentsData.usage
+    readonly property bool ok: enabledData && u !== null && u.ok === true
     readonly property bool bars: (Config.store.claude.view || "rings") === "bars"
-    implicitHeight: pad * 2 + 22 + (!AgentsData.enabled || !ok ? 56 : (bars ? 96 : 128)) + (ok ? 22 : 0)
+    implicitHeight: pad * 2 + 22 + (!w.enabledData || !ok ? 56 : (bars ? 96 : 128)) + (ok ? 22 : 0)
 
     Row {
         id: head
         spacing: 8
         Text { text: "󰚩"; color: Theme.accent; font.family: Theme.iconFont; font.pixelSize: 14 }
-        Text { text: Tr.t("Лимиты Claude"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.6 }
+        Text { text: (w.codex ? Tr.t("Лимиты Codex") : Tr.t("Лимиты Claude")); color: Theme.sub; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.6 }
         Text { visible: w.ok && w.u.plan !== ""; text: w.ok ? "· " + w.u.plan : ""; color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
     }
 
@@ -24,7 +26,7 @@ WCard {
         visible: !w.ok
         anchors { top: head.bottom; topMargin: 10 }
         width: parent.width; wrapMode: Text.WordWrap
-        text: !AgentsData.enabled ? Tr.t("Лимиты выключены: Функции → «Лимиты Claude»") : (AgentsData.loading ? Tr.t("Получаю данные…") : (AgentsData.err !== "" ? "󰖪 " + AgentsData.errText(AgentsData.err) : Tr.t("Нет данных")))
+        text: !w.enabledData ? Tr.t("Лимиты выключены: Функции → «Лимиты Claude»") : (w.codex ? Tr.t("Лимиты появятся после запроса в Codex") : (AgentsData.loading ? Tr.t("Получаю данные…") : (AgentsData.err !== "" ? "󰖪 " + AgentsData.errText(AgentsData.err) : Tr.t("Нет данных"))))
         color: AgentsData.err !== "" ? Theme.yellow : Theme.sub; font.family: Theme.iconFont; font.pixelSize: 12
     }
 
@@ -34,7 +36,7 @@ WCard {
         anchors { top: head.bottom; topMargin: 10 }
         width: parent.width; spacing: 10
         Repeater {
-            model: w.ok ? [{ t: Tr.t("5 часов"), u: w.u.five }, { t: Tr.t("Неделя"), u: w.u.seven }] : []
+            model: w.ok ? AgentsData.quotaWindows(w.u, w.codex) : []
             Column {
                 required property var modelData
                 width: (parent.width - 10) / 2; spacing: 4
@@ -54,7 +56,7 @@ WCard {
         anchors { top: head.bottom; topMargin: 10 }
         width: parent.width; spacing: 8
         Repeater {
-            model: w.ok ? [{ t: Tr.t("5 часов"), u: w.u.five }, { t: Tr.t("Неделя"), u: w.u.seven }] : []
+            model: w.ok ? AgentsData.quotaWindows(w.u, w.codex) : []
             Item {
                 required property var modelData
                 width: parent.width; height: 38
@@ -70,7 +72,7 @@ WCard {
         visible: w.ok
         anchors { bottom: parent.bottom }
         width: parent.width; elide: Text.ElideRight
-        text: !w.ok ? "" : (w.u.eta ? Tr.t("󰀦 исчерпается через ") + AgentsData.etaText(w.u.eta) : Tr.t("󰄬 хватит до сброса"))
+        text: !w.ok ? "" : (w.codex ? Tr.t("Снимок Codex · ") + w.u.age + Tr.t(" с назад") : (w.u.eta ? Tr.t("󰀦 исчерпается через ") + AgentsData.etaText(w.u.eta) : Tr.t("󰄬 хватит до сброса")))
         color: w.ok && w.u.eta ? Theme.red : Theme.green; font.family: Theme.iconFont; font.pixelSize: 11
     }
     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "agents", "toggle"]) }
