@@ -32,6 +32,7 @@ ShellRoot {
 
     // ---------- переход курсора (NameLess UI + Orbit): читается из nameless.json, пишется через ipc NameLess — один писатель у файла ----------
     property var cross: ({})
+    function asList(v) { return Array.isArray(v) ? v : (v && typeof v === "object" ? (v.device !== undefined ? [v] : Object.keys(v).map(function (k) { return v[k]; })) : []); }
     FileView {
         path: Quickshell.env("HOME") + "/.config/glassrice/nameless.json"
         blockLoading: true
@@ -45,7 +46,7 @@ ShellRoot {
         Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "set", key, JSON.stringify(value)]);
     }
     function crossSide(dev, name, side) {
-        var l = (cross.links || []).filter(function (x) { return x.device !== dev; });
+        var l = asList(cross.links).filter(function (x) { return x.device !== dev; });
         // одна сторона — один сосед: тот, кто стоял на этом краю, снимается; «Нет» запоминается (side: "off"), чтобы соседа не расставляло заново само
         if (side !== "off") l = l.filter(function (x) { return x.side !== side; });
         crossSet("links", l.concat([{ device: dev, name: name, side: side }]));
@@ -57,7 +58,7 @@ ShellRoot {
     function sceneSet(k, v) { var n = Object.assign({ out: true, in: true, deny: true, link: true, hint: true }, cross.scenes || {}); n[k] = v; crossSet("scenes", n); }
     function crossTry(scene) { sceneT.scene = scene; sceneT.restart(); }
     Timer { id: sceneT; property string scene: "out"; interval: 350; onTriggered: Quickshell.execDetached(["qs", "-c", "nameless", "ipc", "call", "crossing", "preview", scene]) }
-    function sideOf(dev) { var l = cross.links || []; for (var i = 0; i < l.length; i++) if (l[i].device === dev) return l[i].side; return "off"; }
+    function sideOf(dev) { var l = asList(cross.links); for (var i = 0; i < l.length; i++) if (l[i].device === dev) return l[i].side; return "off"; }
     // соседи из Orbit: подключённые, у которых есть переход курсора
     property var crossPeers: []
     property bool orbitUp: false

@@ -16,10 +16,29 @@ import Quickshell.Hyprland
 Scope {
     id: cross
     readonly property var cfg: Config.store.crossing || ({})
+    // links в файле мог оказаться объектом вместо массива — тогда filter/slice падали и переход не работал
+    function asList(v) { return Array.isArray(v) ? v : (v && typeof v === "object" ? (v.device !== undefined ? [v] : Object.keys(v).map(function (k) { return v[k]; })) : []); }
+    readonly property var linkList: asList(cfg.links)
     readonly property bool on: cfg.enabled === true && OrbitData.enabled && OrbitData.running
+    // стороны, где стоит виртуальный монитор «второго экрана»: там уже есть продолжение рабочего стола, переход курсора на этот край не нужен
+    readonly property var virtualSides: {
+        var real = Quickshell.screens.filter(function (s) { return String(s.name).indexOf("HEADLESS") !== 0; });
+        var out = {};
+        if (real.length === 0) return out;
+        var l = Math.min.apply(null, real.map(function (s) { return s.x; })), t = Math.min.apply(null, real.map(function (s) { return s.y; }));
+        var r = Math.max.apply(null, real.map(function (s) { return s.x + s.width; })), b = Math.max.apply(null, real.map(function (s) { return s.y + s.height; }));
+        Quickshell.screens.forEach(function (s) {
+            if (String(s.name).indexOf("HEADLESS") !== 0) return;
+            if (s.x + s.width <= l) out.left = true;
+            else if (s.x >= r) out.right = true;
+            else if (s.y + s.height <= t) out.top = true;
+            else if (s.y >= b) out.bottom = true;
+        });
+        return out;
+    }
     // края, за которыми сейчас есть сосед на связи с поддержкой перехода
-    readonly property var links: !on ? [] : (cfg.links || []).filter(function (l) {
-        return l.side && l.side !== "off" && OrbitData.connected.some(function (c) {
+    readonly property var links: !on ? [] : linkList.filter(function (l) {
+        return l.side && l.side !== "off" && !virtualSides[l.side] && OrbitData.connected.some(function (c) {
             return c.deviceId === l.device && (c.remoteCapabilities || []).indexOf("crossing") >= 0;
         });
     })
@@ -143,11 +162,11 @@ Scope {
     // подключённые с переходом курсора, которым ещё не назначен край (записи нет совсем — «Нет» из шторки запоминается как side: "off")
     function autoPlace(reset) {
         if (!cfg.enabled) return;
-        var links = reset ? [] : (cfg.links || []).slice();
+        var links = reset ? [] : linkList.slice();
         var peers = OrbitData.connected.filter(function (c) { return (c.remoteCapabilities || []).indexOf("crossing") >= 0; });
         var taken = {};
         links.forEach(function (l) { if (l.side && l.side !== "off") taken[l.side] = true; });
-        var free = ["right", "left", "top", "bottom"].filter(function (x) { return !taken[x]; });
+        var free = ["right", "left", "top", "bottom"].filter(function (x) { return !taken[x] && !virtualSides[x]; });
         var changed = reset === true;
         peers.forEach(function (c) {
             if (links.some(function (l) { return l.device === c.deviceId; }) || free.length === 0) return;
