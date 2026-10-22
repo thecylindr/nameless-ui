@@ -37,11 +37,13 @@ Scope {
         return out;
     }
     // края, за которыми сейчас есть сосед на связи с поддержкой перехода
-    readonly property var links: !on ? [] : linkList.filter(function (l) {
-        return l.side && l.side !== "off" && !virtualSides[l.side] && OrbitData.connected.some(function (c) {
+    // links без учёта виртуального монитора: по ней считаются вспышки «сосед появился/пропал» — иначе включение второго экрана выглядело как уход соседа
+    readonly property var linksAll: !on ? [] : linkList.filter(function (l) {
+        return l.side && l.side !== "off" && OrbitData.connected.some(function (c) {
             return c.deviceId === l.device && (c.remoteCapabilities || []).indexOf("crossing") >= 0;
         });
     })
+    readonly property var links: linksAll.filter(function (l) { return !virtualSides[l.side]; })
     readonly property var screens: Quickshell.screens.filter(function (s) { return String(s.name).indexOf("HEADLESS") !== 0; })
     // самый крайний монитор с этой стороны раскладки
     function screenFor(side) {
@@ -138,13 +140,18 @@ Scope {
         if (kind === "none") return;
         fxN++;
         if (o.dir === "out" && !o.link) lastOut = Date.now();
-        fx = fx.concat([Object.assign({ n: fxN, kind: kind, kk: (o.dir === "hint" ? 0.45 : (o.soft ? 0.7 : 1)) * ((cfg.effect || "auto") === "auto" ? sizeK(o.screen) : 1) }, o)]);
+        fx = fx.concat([Object.assign({ n: fxN, t0: Date.now(), kind: kind, kk: (o.dir === "hint" ? 0.45 : (o.soft ? 0.7 : 1)) * ((cfg.effect || "auto") === "auto" ? sizeK(o.screen) : 1) }, o)]);
     }
     property double hintUntil: 0           // подсказка у края не чаще раза в 1,5 с: курсор у кромки легко дрожит
     function hint(side, pos, screen) {
         if (Date.now() < hintUntil) return;
         hintUntil = Date.now() + 1500;
         show({ dir: "hint", side: side, pos: pos, screen: screen });
+    }
+    // страховка: слой эффекта, чей монитор пропал посреди анимации, не доигрывает и не вызывает finished — без этого он оставался на экране
+    Timer {
+        running: cross.fx.length > 0; repeat: true; interval: 1000
+        onTriggered: { var lim = (cross.cfg.duration || 700) + 1500, now = Date.now(); cross.fx = cross.fx.filter(function (f) { return now - f.t0 < lim; }); }
     }
     function done(n) { fx = fx.filter(function (f) { return f.n !== n; }); }
     // пример для настроек: сцена scene — out (уход и приход подряд), deny, hint, link
@@ -183,9 +190,9 @@ Scope {
     property var seen: ({})
     property bool ready: false
     Timer { running: true; interval: 4000; onTriggered: cross.ready = true }
-    onLinksChanged: {
+    onLinksAllChanged: {
         var now = {};
-        links.forEach(function (l) { now[l.device] = l; });
+        linksAll.forEach(function (l) { now[l.device] = l; });
         if (ready) {
             for (var d in now) if (!seen[d]) show({ dir: "in", side: now[d].side, pos: 0.5, screen: (screenFor(now[d].side) || {}).name || "", soft: true, link: true });
             for (var o in seen) if (!now[o]) show({ dir: "out", side: seen[o].side, pos: 0.5, screen: (screenFor(seen[o].side) || {}).name || "", soft: true, link: true });
