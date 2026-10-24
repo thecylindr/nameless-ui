@@ -14,7 +14,7 @@ Singleton {
 
     // виды виджетов: подпись, значок и описание для панели «Рабочий стол»
     readonly property var kinds: ({
-        clock:    { name: "Часы",        icon: "󰥔", about: "цифры, стрелки, словами или столбиком; второй часовой пояс" },
+        clock:    { name: "Часы",        icon: "󰥔", about: "цифры, стрелки, словами, столбиком, перекидные карточки, пиксели; второй часовой пояс" },
         system:   { name: "Нагрузка",    icon: "󰍛", about: "процессор, память, температура, диск, сеть, батарея, видеокарта" },
         player:   { name: "Плеер",       icon: "󰝚", about: "обложка, перемотка, повтор и перемешивание" },
         calendar: { name: "Календарь",   icon: "󰃭", about: "месяц, листается колесом; номера недель" },
@@ -30,7 +30,13 @@ Singleton {
         tokens:   { name: "Расход токенов", icon: "󰆼", about: "токены за сегодня, неделю и 5 часов, столбики по дням и моделям" },
         orbit:    { name: "Устройства",  icon: "󰟀", about: "NameLess Orbit: подключённые устройства, заряд, «найти», буфер обмена" },
         touch:    { name: "Сенсорная панель", icon: "󰟸", about: "тачпад: точки на месте пальцев и клики своим цветом (левая, правая, средняя), как touchview" },
-        agents:   { name: "Помощники",   icon: "󰚩", about: "Claude Code и Codex: кто работает, ждёт, последнее сообщение; быстрый вопрос" }
+        agents:   { name: "Помощники",   icon: "󰚩", about: "Claude Code и Codex: кто работает, ждёт, последнее сообщение; быстрый вопрос" },
+        pets:     { name: "Питомцы",     icon: "󰄛", about: "пиксельные рыжий кот, белая кошка, корги, Клод — гуляют, спят, прыгают по нажатию" },
+        clawd:    { name: "Клод",        icon: "󰚩", about: "пиксельный Claude: печатает, пока помощник работает, машет, когда ждёт ответа, спит без дела" },
+        gif:      { name: "GIF",         icon: "󰵸", about: "анимированная картинка или папка с ними; пиксельно, без сглаживания" },
+        fish:     { name: "Аквариум",    icon: "󰈺", about: "пиксельные рыбки, пузырьки и водоросли; нажатие — рыбки разбегаются" },
+        moon:     { name: "Луна",        icon: "󰽥", about: "фаза Луны на сегодня, освещённость и сколько дней до полнолуния" },
+        quote:    { name: "Фраза дня",   icon: "󰉾", about: "короткая тёплая мысль, каждый день новая; нажатие — следующая" }
     })
     // ширина виджета по размеру
     readonly property var sizes: ({ S: 240, M: 300, L: 380 })
@@ -51,7 +57,11 @@ Singleton {
             trash: true         // корзина справа
         },
         widgets: {
-            layout: "grid",     // grid — сетка по двум осям, columns — колонки списком, free — свободно (с привязкой к соседям)
+            align: "center",    // по рядам: left | center | right | fill (колонки на всю ширину)
+            scale: "auto",      // масштаб виджетов: auto — по размеру экрана, или число (0.85 … 1.5)
+            cols: 0,            // колонок (0 — авто): ряды и колонки делят ширину поровну, масштаб — под ширину колонки
+            rows: 0,            // рядов (0 — авто): колонок = виджетов ÷ рядов
+            layout: "auto",     // auto — по рядам на всю ширину экрана, grid — сетка по двум осям, columns — колонки списком, free — свободно (с привязкой к соседям)
             side: "left",       // сетка: с какого края колонки; свободно — колонка для неперемещённых
             look: "glass",      // фон карточек: glass | solid | clear
             items: [
@@ -71,7 +81,13 @@ Singleton {
                 { type: "claude", on: false, size: "M" },
                 { type: "tokens", on: false, size: "M" },
                 { type: "orbit", on: false, size: "M" },
-                { type: "touch", on: false, size: "M" }
+                { type: "touch", on: false, size: "M" },
+                { type: "pets", on: false, size: "M" },
+                { type: "clawd", on: false, size: "S" },
+                { type: "gif", on: false, size: "S" },
+                { type: "fish", on: false, size: "M" },
+                { type: "moon", on: false, size: "M" },
+                { type: "quote", on: false, size: "M" }
             ]
         },
         clock: {
@@ -94,13 +110,18 @@ Singleton {
         notes: { text: "", size: 13 },
         timer: { work: 25, rest: 5 },                         // мин
         actions: { list: ["terminal", "files", "screenshot", "lock", "drawer", "programs"] },
-        photo: { dir: "~/Pictures", interval: 30 },           // с
+        photo: { dir: "~/Pictures", interval: 30 },
+        pets: { list: ["ginger", "white"], unit: 4, ground: true, scene: "auto" },     // scene: auto (по дате) | none | park | home | night | winter | beach | spring | autumn | newyear | halloween | valentine             // ginger | white | corgi | clawd; unit — размер «пикселя» спрайта
+        gif: { path: "", pixel: true, scale: 1, interval: 30, card: false },     // файл или папка; pixel — без сглаживания
+        icons: { overrides: {} },
+        fish: { count: 4 },                                                     // рыбок в аквариуме                                               // свои значки приложений: { имя значка: имя в теме | /путь }           // с
         updates: { interval: 60 },                            // мин
         countdown: { title: "Новый год", date: "2027-01-01" },
         orbit: { enabled: true, bar: true, dock: true, indock: false, autostart: true, claude: true, claudeMin: 20 },   // claude — сообщать на устройства, что Claude закончил работу; claudeMin — не короче стольких секунд             // верхний док устройств; запуск Orbit в фоне, когда он нужен
         // переход курсора между компьютерами (Orbit): links — [{ device, name, side }], side — край этого экрана (left|right|top|bottom|off);
         // effect — glow | ripple | sparks | line | portal | none; color — accent | accent2 | white | #RRGGBB; delay — задержка на краю, мс
-        crossing: { enabled: false, monitors: true, effect: "auto", motion: "smooth", bloom: true, particles: true, reducedMotion: false, portalDepth: 1.0, effectOut: "", effectIn: "", color: "accent", duration: 700, intensity: 1.0, delay: 120, links: [], scenes: { out: true, in: true, deny: true, link: true, hint: true } },
+        crossing: { enabled: false, monitors: true, effect: "auto", motion: "smooth", bloom: true, particles: true, reducedMotion: false, portalDepth: 1.0, effectOut: "", effectIn: "", color: "accent", duration: 700, intensity: 1.0, delay: 120, links: [], scenes: { out: true, in: true, deny: true, link: true, hint: true },
+                    actions: { clipboard: true, badge: true, quiet: false } },        // вспомогательные действия при переходе курсора на другой компьютер
         touchpad: { left: "", right: "", middle: "", dot: "", dotSize: 9 },        // цвета — имя цвета темы (accent, red, green…) или #RRGGBB; пусто — по умолчанию
         claude: { view: "rings", provider: "claude" },                          // rings | bars
         tokens: { view: "chart", provider: "claude" },                          // chart | numbers
@@ -114,6 +135,9 @@ Singleton {
         notifs: { dnd: false },
         // производительность: auto — экономно от батареи, normal, eco
         perf: { mode: "auto" },
+        apps: { entries: true, hidden: [] },   // окна NameLess — ярлыками в меню приложений (rofi, лаунчер); hidden — какие убрать
+        // графика ноутбука (gpu.sh): ask — спрашивать при отключении зарядки; prev — режим до перехода на встроенную
+        gpu: { ask: true, prev: "" },
         // жест от верхнего края: auto — только с сенсорным экраном, on, off
         touch: { edge: "auto" },
         // профили: набор настроек одним нажатием; значения "keep" (не менять) | "on" | "off", яркость 0 — не менять
@@ -210,6 +234,8 @@ Singleton {
         d.widgets.items = items.map(function (x) { return Object.assign({ size: "M" }, x); });
         // прежние настройки (до параметров виджетов): ширина колонки → размер
         delete d.widgets.width;
+        // один раз (флаг layoutV2 в файле, не в значениях по умолчанию — иначе он подмешался бы до проверки): расстановка «по рядам» — прежняя сетка ставила виджеты столбцом у края и оставляла пустую полосу
+        if (d.widgets.layoutV2 !== true) { d.widgets.layout = "auto"; d.widgets.layoutV2 = true; }
         return d;
     }
 
@@ -276,12 +302,18 @@ Singleton {
     }
     function toggleWidget(type) { var it = item(type); if (it) setItem(type, "on", !it.on); }
     // перетаскивание: сразу x и y одной записью
-    function placeWidget(type, x, y) {
-        set("widgets.items", widgets.items.map(function (w) { return w.type === type ? Object.assign({}, w, { x: Math.round(x), y: Math.round(y) }) : w; }));
+    // место виджета: пиксели и доли экрана (rx, ry) — по долям место сохраняется на другом мониторе и при другом масштабе
+    function placeWidget(type, x, y, rx, ry) {
+        set("widgets.items", widgets.items.map(function (w) {
+            if (w.type !== type) return w;
+            var c = Object.assign({}, w, { x: Math.round(x), y: Math.round(y) });
+            if (rx !== undefined) { c.rx = Math.round(rx * 10000) / 10000; c.ry = Math.round(ry * 10000) / 10000; }
+            return c;
+        }));
     }
     // вернуть все виджеты в колонку
     function unplaceWidgets() {
-        set("widgets.items", widgets.items.map(function (w) { var c = Object.assign({}, w); delete c.x; delete c.y; return c; }));
+        set("widgets.items", widgets.items.map(function (w) { var c = Object.assign({}, w); delete c.x; delete c.y; delete c.rx; delete c.ry; return c; }));
     }
     // сетка: перенести виджет в колонку col и встать перед виджетом before (или в конец)
     function gridMove(type, col, before) {

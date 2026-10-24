@@ -18,7 +18,7 @@ Item {
     transform: Translate { x: s.dx; y: s.dy }
 
     RectangularShadow {
-        visible: s.shadow && Theme.glass
+        visible: s.shadow && Theme.glass && !Perf.eco        // тень — в экономном режиме нет (размытая тень перерисовывается вместе с панелью)
         anchors.fill: parent
         radius: Theme.r(s.radius)
         blur: 28

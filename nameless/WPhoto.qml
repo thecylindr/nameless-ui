@@ -21,7 +21,7 @@ Item {
     }
     onDirChanged: lister.running = true
     Timer { interval: 600000; repeat: true; running: w.visible; triggeredOnStart: true; onTriggered: if (!lister.running) lister.running = true }
-    Timer { interval: Math.max(5, w.o.interval || 30) * 1000; repeat: true; running: w.visible && w.files.length > 1; onTriggered: w.next() }
+    Timer { interval: Math.max(5, w.o.interval || 30) * 1000; repeat: true; running: w.visible && w.files.length > 1 && !Compositor.covered; onTriggered: w.next() }
     function next() { if (files.length > 0) idx = (idx + 1) % files.length; }
     readonly property string cur: files.length > 0 ? "file://" + files[idx % files.length] : ""
 

@@ -120,12 +120,58 @@ PanelWindow {
                         label: Tr.t("Расстановка")
                         GSegment {
                             ui: Theme
-                            options: [{ v: "grid", t: Tr.t("Сетка"), icon: "󰕰" }, { v: "columns", t: Tr.t("Колонки"), icon: "󰕭" }, { v: "free", t: Tr.t("Свободно"), icon: "󰆾" }]
-                            value: Config.widgets.layout || "grid"
+                            options: [{ v: "auto", t: Tr.t("По рядам"), icon: "󰕮" }, { v: "grid", t: Tr.t("Сетка"), icon: "󰕰" }, { v: "columns", t: Tr.t("Колонки"), icon: "󰕭" }, { v: "free", t: Tr.t("Свободно"), icon: "󰆾" }]
+                            value: Config.widgets.layout || "auto"
                             onPicked: (v) => Config.set("widgets.layout", v)
                         }
                     }
                     Labeled {
+                        visible: (Config.widgets.layout || "auto") === "auto"
+                        label: Tr.t("Ряды")
+                        GSegment {
+                            ui: Theme
+                            options: [{ v: "left", t: Tr.t("Слева"), icon: "󰁍" }, { v: "center", t: Tr.t("По центру"), icon: "󰘞" }, { v: "right", t: Tr.t("Справа"), icon: "󰁔" }, { v: "fill", t: Tr.t("На всю ширину"), icon: "󰡎" }]
+                            value: Config.widgets.align || "center"
+                            onPicked: (v) => Config.set("widgets.align", v)
+                        }
+                    }
+                    Labeled {
+                        visible: ["auto", "columns"].indexOf(Config.widgets.layout || "auto") >= 0
+                        label: Tr.t("Колонок")
+                        GSegment {
+                            ui: Theme
+                            options: [{ v: "0", t: Tr.t("Авто") }, { v: "2", t: "2" }, { v: "3", t: "3" }, { v: "4", t: "4" }, { v: "5", t: "5" }, { v: "6", t: "6" }, { v: "8", t: "8" }]
+                            value: String(Config.widgets.cols || 0)
+                            onPicked: (v) => { Config.set("widgets.cols", Number(v)); if (Number(v) > 0) Config.set("widgets.rows", 0); }
+                        }
+                    }
+                    Labeled {
+                        visible: (Config.widgets.layout || "auto") === "auto"
+                        label: Tr.t("Рядов")
+                        GSegment {
+                            ui: Theme
+                            options: [{ v: "0", t: Tr.t("Авто") }, { v: "1", t: "1" }, { v: "2", t: "2" }, { v: "3", t: "3" }, { v: "4", t: "4" }]
+                            value: String(Config.widgets.rows || 0)
+                            onPicked: (v) => { Config.set("widgets.rows", Number(v)); if (Number(v) > 0) Config.set("widgets.cols", 0); }
+                        }
+                    }
+                    Text {
+                        visible: (Config.widgets.cols || 0) > 0 || (Config.widgets.rows || 0) > 0
+                        width: parent.width; wrapMode: Text.WordWrap
+                        text: Tr.t("Колонки делят ширину экрана поровну, размер виджетов подбирается сам — масштаб ниже не действует")
+                        color: Theme.sub; font.family: Theme.font; font.pixelSize: 11
+                    }
+                    Labeled {
+                        label: Tr.t("Масштаб")
+                        GSegment {
+                            ui: Theme
+                            options: [{ v: "auto", t: Tr.t("Авто") }, { v: "0.85", t: "85%" }, { v: "1", t: "100%" }, { v: "1.15", t: "115%" }, { v: "1.3", t: "130%" }, { v: "1.5", t: "150%" }]
+                            value: String(Config.widgets.scale === undefined ? "auto" : Config.widgets.scale)
+                            onPicked: (v) => Config.set("widgets.scale", v === "auto" ? "auto" : Number(v))
+                        }
+                    }
+                    Labeled {
+                        visible: (Config.widgets.layout || "auto") !== "auto"
                         label: Tr.t("Колонки с края")
                         GSegment {
                             ui: Theme
@@ -204,7 +250,7 @@ PanelWindow {
                                 visible: opts.t === "clock"
                                 width: parent.width; spacing: 10
                                 readonly property var o: Config.store.clock
-                                Labeled { label: Tr.t("Вид"); GSegment { ui: Theme; options: [{ v: "digital", t: Tr.t("Цифры") }, { v: "analog", t: Tr.t("Стрелки") }, { v: "words", t: Tr.t("Словами") }, { v: "stack", t: Tr.t("Столбик") }]; value: Config.store.clock.style || "digital"; onPicked: (v) => Config.set("clock.style", v) } }
+                                Labeled { label: Tr.t("Вид"); GSegment { ui: Theme; options: [{ v: "digital", t: Tr.t("Цифры") }, { v: "analog", t: Tr.t("Стрелки") }, { v: "words", t: Tr.t("Словами") }, { v: "stack", t: Tr.t("Столбик") }, { v: "flip", t: Tr.t("Карточки") }, { v: "pixel", t: Tr.t("Пиксели") }]; value: Config.store.clock.style || "digital"; onPicked: (v) => Config.set("clock.style", v) } }
                                 Labeled { label: Tr.t("Дата"); GSegment { ui: Theme; options: [{ v: "long", t: Tr.t("Полная") }, { v: "short", t: Tr.t("Кратко") }, { v: "none", t: Tr.t("Нет") }]; value: Config.store.clock.date || "long"; onPicked: (v) => Config.set("clock.date", v) } }
                                 GSwitch { ui: Theme; label: Tr.t("24-часовой формат"); checked: Config.store.clock.h24 !== false; onToggled: (v) => Config.set("clock.h24", v) }
                                 GSwitch { ui: Theme; label: Tr.t("Секунды"); checked: Config.store.clock.seconds === true; onToggled: (v) => Config.set("clock.seconds", v) }
@@ -291,7 +337,41 @@ PanelWindow {
                                 GSwitch { ui: Theme; label: Tr.t("Лимиты Claude"); sub: Tr.t("окно 5 часов и неделя; запрос с токеном Claude Code раз в 2 минуты"); checked: Config.store.agents.quota !== false; onToggled: (v) => Config.set("agents.quota", v) }
                                 GSwitch { ui: Theme; label: Tr.t("Лимит в баре"); sub: Tr.t("процент окна 5 часов рядом со временем"); checked: Config.store.agents.bar === true; onToggled: (v) => Config.set("agents.bar", v) }
                             }
-                            Text { visible: ["notifs"].indexOf(opts.t) >= 0; text: Tr.t("Других параметров нет"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                            Column {
+                                visible: opts.t === "pets"
+                                width: parent.width; spacing: 10
+                                Chips {
+                                    keys: [["ginger", Tr.t("󰄛 Рыжий кот")], ["white", Tr.t("󰄛 Белая кошка")], ["black", Tr.t("󰄛 Чёрный кот")], ["corgi", Tr.t("󰩃 Корги")], ["fox", Tr.t("󰩃 Лиса")], ["clawd", Tr.t("󰚩 Клод")]]
+                                    isOn: function (k) { return (Config.store.pets.list || []).indexOf(k) >= 0; }
+                                    onToggle: (k) => {
+                                        var l = (Config.store.pets.list || []).slice(), i = l.indexOf(k);
+                                        if (i >= 0) l.splice(i, 1); else l.push(k);
+                                        Config.set("pets.list", l);
+                                    }
+                                }
+                                Text { text: Tr.t("Сцена"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                                Chips {
+                                    keys: [["auto", Tr.t("󰃭 Авто по дате")], ["none", Tr.t("Без фона")], ["home", Tr.t("󰋜 Дом")], ["park", Tr.t("󰐅 Парк")], ["night", Tr.t("󰖔 Ночь")],
+                                           ["winter", Tr.t("󰜗 Зима")], ["beach", Tr.t("󰖨 Пляж")], ["spring", Tr.t("󰉊 Весна")], ["autumn", Tr.t("󰌪 Осень")],
+                                           ["newyear", Tr.t("󰜈 Новый год")], ["halloween", Tr.t("󰮣 Хэллоуин")], ["valentine", Tr.t("󰣐 День влюблённых")]]
+                                    isOn: function (k) { return (Config.store.pets.scene || "auto") === k; }
+                                    onToggle: (k) => Config.set("pets.scene", k)
+                                }
+                                Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("Наведите и подержите — мурлычет; нажатие — прыжок; перетащите — переставить; клик по пустому месту — мячик; «Покормить» — миска. Дома котики спят в лукошке у печки."); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                                PillSlider { ui: Theme; width: parent.width; icon: "󰩨"; label: Tr.t("Размер"); from: 2; to: 7; stepSize: 1; decimals: 0; value: Config.store.pets.unit || 4; onCommitted: (v) => Config.set("pets.unit", v) }
+                                GSwitch { visible: (Config.store.pets.scene || "auto") === "none"; ui: Theme; label: Tr.t("Земля"); sub: Tr.t("тонкая линия, по которой ходят питомцы"); checked: Config.store.pets.ground !== false; onToggled: (v) => Config.set("pets.ground", v) }
+                            }
+                            Column {
+                                visible: opts.t === "gif"
+                                width: parent.width; spacing: 10
+                                Field { icon: "󰵸"; hint: Tr.t("Файл или папка с GIF"); value: Config.store.gif.path || ""; onCommitted: (v) => Config.set("gif.path", v) }
+                                GSwitch { ui: Theme; label: Tr.t("Пиксельно"); sub: Tr.t("без сглаживания — для пиксель-арта"); checked: Config.store.gif.pixel !== false; onToggled: (v) => Config.set("gif.pixel", v) }
+                                GSwitch { ui: Theme; label: Tr.t("Карточка"); sub: Tr.t("стеклянная подложка под картинкой"); checked: Config.store.gif.card === true; onToggled: (v) => Config.set("gif.card", v) }
+                                PillSlider { ui: Theme; width: parent.width; icon: "󰩨"; label: Tr.t("Масштаб"); from: 1; to: 6; stepSize: 1; decimals: 0; value: Config.store.gif.scale || 1; suffix: "×"; onCommitted: (v) => Config.set("gif.scale", v) }
+                                PillSlider { ui: Theme; width: parent.width; icon: "󰔟"; label: Tr.t("Смена (папка) раз в"); from: 5; to: 300; stepSize: 5; decimals: 0; value: Config.store.gif.interval || 30; suffix: Tr.t(" с"); onCommitted: (v) => Config.set("gif.interval", v) }
+                            }
+                            PillSlider { visible: opts.t === "fish"; ui: Theme; width: parent.width; icon: "󰈺"; label: Tr.t("Рыбок"); from: 1; to: 8; stepSize: 1; decimals: 0; value: Config.store.fish.count || 4; onCommitted: (v) => Config.set("fish.count", v) }
+                            Text { visible: ["notifs", "clawd", "moon", "quote"].indexOf(opts.t) >= 0; text: Tr.t("Других параметров нет"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
                         }
                     }
                 }
@@ -356,9 +436,7 @@ PanelWindow {
                             sourceSize: Qt.size(32, 32)
                             asynchronous: true
                             source: {
-                                var n = prow.entry ? prow.entry.icon : prow.id0;
-                                if (n && n.charAt(0) === "/") return "file://" + n;
-                                return Quickshell.iconPath(n || "", true) || Quickshell.iconPath("application-x-executable", true);
+                                return Icons.app(prow.entry ? prow.entry.icon : prow.id0);
                             }
                         }
                         Column {

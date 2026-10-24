@@ -1,0 +1,13 @@
+# Общее для любого железа: прошивки, звук SOF, сеть, Bluetooth
+linux-firmware
+sof-firmware
+networkmanager
+network-manager-applet
+wpa_supplicant
+bluez
+bluez-utils
+bluetui
+brightnessctl
+openrgb
+# Яркость внешних мониторов по DDC/CI (ПК без подсветки)
+ddcutil

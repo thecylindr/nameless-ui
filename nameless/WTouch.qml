@@ -56,7 +56,7 @@ WCard {
 
     Process {
         id: proc
-        running: w.visible && w.err !== "perm" && w.err !== "no-touchpad"
+        running: w.visible && !Compositor.covered && w.err !== "perm" && w.err !== "no-touchpad"
         command: ["python3", w.script]
         stdout: SplitParser { onRead: data => w.handle(data) }
         onExited: { w.fingers = []; w.bl = false; w.br = false; w.bm = false; }

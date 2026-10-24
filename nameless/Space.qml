@@ -84,16 +84,17 @@ Item {
     readonly property bool covered: Compositor.covered
     readonly property bool lowBattery: Sys.hasBattery && !Sys.charging && Sys.batPct < 25
     readonly property bool live: visible && !covered && !lowBattery && speed > 0
-    // один шаг на кадр, но не чаще 60 раз в секунду: движение планет и камеры плавное (раньше — 20 раз в секунду,
-    // и это выглядело как торможение), а на 165 Гц сцена не перерисовывается без нужды
-    property real acc: 0
-    FrameAnimation {
+    // шаг по таймеру с частотой Perf.fps (60 или 30 в экономном режиме): FrameAnimation будил отрисовку на каждом кадре монитора (165 Гц),
+    // и слой виджетов отправлялся композитору в 2–3 раза чаще, чем менялась сцена
+    property double last: 0
+    Timer {
+        interval: Math.round(1000 / Perf.fps)
+        repeat: true
         running: sp.visible && (sp.live || sp.camMoving)
+        onRunningChanged: sp.last = Date.now()
         onTriggered: {
-            sp.acc += frameTime;
-            if (sp.acc < 1 / Perf.fps) return;
-            var dt = Math.min(0.1, sp.acc);
-            sp.acc = 0;
+            var now = Date.now(), dt = Math.min(0.1, (now - sp.last) / 1000);
+            sp.last = now;
             if (sp.live) sp.t += dt * sp.speed;
             sp.stepCamera(dt);
         }

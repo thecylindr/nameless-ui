@@ -111,6 +111,7 @@ PanelWindow {
             [Tr.t("Папка и интервал"), Tr.t("шторка → Система → Обои")] ] },
         { icon: "󰂚", title: Tr.t("Уведомления"), items: [
             ["SUPER+N", Tr.t("центр уведомлений: история, плеер")],
+            ["SUPER+Z", Tr.t("Пункт управления: плитки, звук, яркость, режимы питания")],
             ["SUPER+SHIFT+N", Tr.t("не беспокоить — только важные")] ] },
         { icon: "󰉋", title: Tr.t("Файлы"), items: [
             ["~/.config/hypr-themes", Tr.t("темы, шаблоны, палитры")],
@@ -491,39 +492,69 @@ PanelWindow {
                 contentHeight: keysFlow.implicitHeight
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                Flow {
+                // раскладка «кирпичами»: секция встаёт в самую короткую колонку (по числу строк), описания переносятся — без дыр и многоточий
+                Row {
                     id: keysFlow
                     width: parent.width
                     spacing: 12
+                    readonly property int cols: width >= 900 ? 3 : (width >= 560 ? 2 : 1)
+                    readonly property real colW: (width - spacing * (cols - 1)) / cols
+                    readonly property var lanes: {
+                        var h = [], out = [];
+                        for (var c = 0; c < cols; c++) { h.push(0); out.push([]); }
+                        w.sections.forEach(function (sec) {
+                            var best = 0;
+                            for (var k = 1; k < cols; k++) if (h[k] < h[best]) best = k;
+                            out[best].push(sec);
+                            h[best] += 2 + sec.items.reduce(function (n, it) { return n + 1 + Math.floor(it.act.length / 34); }, 0);
+                        });
+                        return out;
+                    }
                     Repeater {
-                        model: w.sections
-                        Item {
-                            id: sec
+                        model: keysFlow.lanes
+                        Column {
                             required property var modelData
-                            width: (keysFlow.width - 24) / 3
-                            height: secCol.implicitHeight + 24
-                            Rectangle { anchors.fill: parent; radius: Theme.r(18); color: Theme.fill(0.06); border.width: Theme.ios ? 0 : 1; border.color: Theme.line(0.14) }
-                            Column {
-                                id: secCol
-                                x: 14; y: 12
-                                width: parent.width - 28
-                                spacing: 7
-                                Text { text: sec.modelData.title; color: Theme.accent; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.6 }
-                                Repeater {
-                                    model: sec.modelData.items
-                                    Row {
-                                        required property var modelData
-                                        width: secCol.width
-                                        spacing: 10
-                                        Rectangle {
-                                            width: Math.max(keyText.implicitWidth + 14, 40); height: 24
-                                            radius: Theme.r(7)
-                                            color: Theme.fill(0.12)
-                                            border.width: Theme.ios ? 0 : 1
-                                            border.color: Theme.line(0.2)
-                                            Text { id: keyText; anchors.centerIn: parent; text: modelData.key; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
+                            width: keysFlow.colW
+                            spacing: 12
+                            Repeater {
+                                model: parent.modelData
+                                Item {
+                                    id: sec
+                                    required property var modelData
+                                    width: keysFlow.colW
+                                    height: secCol.implicitHeight + 24
+                                    Rectangle { anchors.fill: parent; radius: Theme.r(18); color: Theme.fill(0.06); border.width: Theme.ios ? 0 : 1; border.color: Theme.line(0.14) }
+                                    Column {
+                                        id: secCol
+                                        x: 14; y: 12
+                                        width: parent.width - 28
+                                        spacing: 7
+                                        Text { text: sec.modelData.title; color: Theme.accent; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.6 }
+                                        Repeater {
+                                            model: sec.modelData.items
+                                            Item {
+                                                id: kr
+                                                required property var modelData
+                                                width: secCol.width
+                                                height: Math.max(24, actText.implicitHeight)
+                                                Rectangle {
+                                                    id: keyBox
+                                                    width: Math.min(Math.max(keyText.implicitWidth + 14, 40), secCol.width * 0.55); height: 24
+                                                    radius: Theme.r(7)
+                                                    color: Theme.fill(0.12)
+                                                    border.width: Theme.ios ? 0 : 1
+                                                    border.color: Theme.line(0.2)
+                                                    Text { id: keyText; anchors.centerIn: parent; width: Math.min(implicitWidth, parent.width - 10); elide: Text.ElideRight; text: kr.modelData.key; color: Theme.text; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold }
+                                                }
+                                                Text {
+                                                    id: actText
+                                                    anchors { left: keyBox.right; leftMargin: 10; right: parent.right }
+                                                    topPadding: 4
+                                                    text: kr.modelData.act; wrapMode: Text.WordWrap
+                                                    color: Theme.sub; font.family: Theme.font; font.pixelSize: 12
+                                                }
+                                            }
                                         }
-                                        Text { anchors.verticalCenter: parent.verticalCenter; width: secCol.width - keyText.implicitWidth - 34; text: modelData.act; color: Theme.sub; font.family: Theme.font; font.pixelSize: 12; elide: Text.ElideRight }
                                     }
                                 }
                             }

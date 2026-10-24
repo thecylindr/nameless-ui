@@ -1,0 +1,4 @@
+# Встроенная графика Intel
+intel-media-driver
+vulkan-intel
+lib32-vulkan-intel

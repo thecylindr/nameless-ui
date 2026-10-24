@@ -171,6 +171,8 @@ PanelWindow {
         if (ptab === 4 && !devProc.running) devProc.running = true;
         if (ptab === 5 && !rgbProc.running) rgbProc.running = true;
         if (ptab === 6) { if (!sysProc.running) sysProc.running = true; if (!orphProc.running) orphProc.running = true; }
+        if (ptab === 7 && !iconsProc.running) iconsProc.running = true;
+        if ((ptab === 8 || (w.drv.gpus || []).length === 0) && !drvProc.running) drvProc.running = true;     // число недостающих — на вкладке сразу
     }
     // компьютер, устройства, подсветка, зависимости
     property var comp: ({})
@@ -183,6 +185,68 @@ PanelWindow {
     readonly property string rgbScript: script.replace(/scripts\/apps\/pkg\.sh$/, "scripts/system/rgb.sh")
     function gib(kib) { return ((kib || 0) / 1048576).toFixed(1); }
     function gb(b) { return ((b || 0) / 1073741824).toFixed(0); }
+    // ---------- иконки: темы и свои значки приложений (icons.sh) ----------
+    readonly property string iconsScript: script.replace(/scripts\/apps\/pkg\.sh$/, "scripts/system/icons.sh")
+    property var icons: ({ current: "", installed: [], catalog: [] })
+    property var iconHits: []
+    property string iconFor: ""            // значок приложения, которому выбирается замена (пусто — просто поиск)
+    property string iconNote: ""
+    Process { id: iconsProc; command: [w.iconsScript, "list"]; stdout: StdioCollector { onStreamFinished: { try { w.icons = JSON.parse(text); } catch (e) { } } } }
+    Process { id: iconSearch; stdout: StdioCollector { onStreamFinished: { try { w.iconHits = JSON.parse(text); } catch (e) { w.iconHits = []; } } } }
+    function findIcons(q) { iconSearch.running = false; iconSearch.command = [iconsScript, "search", icons.current || "hicolor", q, "120"]; iconSearch.running = true; }
+    Process {
+        id: iconSet
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.trim() !== "ok") { w.iconNote = Tr.t("Не удалось применить тему"); return; }
+                w.iconNote = Tr.t("Тема применена — NameLess перезапускается");
+                // Quickshell берёт тему при запуске (QS_ICON_THEME в qs-light.sh): перезапуск отдельным процессом
+                Quickshell.execDetached(["sh", "-c", "sleep 0.6; pkill -f '^(qs|quickshell) -c nameless$'; sleep 0.8; ql=\"$HOME/.config/hypr/Scripts/qs-light.sh\"; [ -x \"$ql\" ] || ql=qs; setsid -f \"$ql\" -c nameless >\"$HOME/.cache/nameless.log\" 2>&1"]);
+            }
+        }
+    }
+    function setIconTheme(id) { iconSet.command = [iconsScript, "set", id]; iconSet.running = true; }
+    // каталог gnome-look.org (icons.sh store): сборки иконок от людей, с автором и ссылкой на страницу
+    property var store: []
+    property int storeTotal: 0
+    property int storePage: 0
+    property string storeQuery: ""
+    property bool storeLoading: false
+    property string storeBusy: ""           // id сборки, которая сейчас ставится
+    Process {
+        id: storeProc
+        stdout: StdioCollector {
+            onStreamFinished: {
+                w.storeLoading = false;
+                try { var r = JSON.parse(text); w.storeTotal = r.total || 0; w.store = w.storePage === 0 ? (r.items || []) : w.store.concat(r.items || []); if (r.error) w.iconNote = r.error; } catch (e) { w.iconNote = Tr.t("Каталог не ответил"); }
+            }
+        }
+    }
+    function loadStore(q, more) {
+        storeQuery = q; storePage = more ? storePage + 1 : 0; storeLoading = true;
+        storeProc.running = false; storeProc.command = [iconsScript, "store", String(storePage), q]; storeProc.running = true;
+    }
+    Process {
+        id: storeInst
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var r = {}; try { r = JSON.parse(text); } catch (e) { }
+                w.iconNote = r.ok ? Tr.t("Установлено: ") + r.themes.join(", ") + Tr.t(" — включите в «Мои темы»") : (r.error || Tr.t("Не удалось установить"));
+                w.storeBusy = ""; iconsProc.running = false; iconsProc.running = true;
+            }
+        }
+    }
+    function installStore(item) {
+        if (!item.files || item.files.length === 0) { iconNote = Tr.t("У сборки нет архива для скачивания — откройте страницу"); return; }
+        storeBusy = String(item.id); iconNote = Tr.t("Скачиваю ") + item.name + "…";
+        storeInst.command = [iconsScript, "store-install", item.files[0].link, item.files[0].name]; storeInst.running = true;
+    }
+
+    // ---------- драйверы видеокарты и процессора (driver.sh --status) ----------
+    readonly property string driverScript: script.replace(/scripts\/apps\/pkg\.sh$/, "scripts/system/driver.sh")
+    property var drv: ({ gpus: [], cpu: {}, missing: 0 })
+    Process { id: drvProc; command: [w.driverScript, "--status"]; stdout: StdioCollector { onStreamFinished: { try { w.drv = JSON.parse(text); } catch (e) { } } } }
+
     Process { id: compProc; command: [w.script, "computer"]; stdout: StdioCollector { onStreamFinished: { try { w.comp = JSON.parse(text); } catch (e) { } } } }
     Process { id: devProc; command: [w.script, "devices"]; stdout: StdioCollector { onStreamFinished: { try { w.devs = JSON.parse(text); } catch (e) { } } } }
     Process {
@@ -198,6 +262,7 @@ PanelWindow {
                         if (w.rgb.saved.speed) w.rgbSpeed = w.rgb.saved.speed;
                         if (w.rgb.saved.color) w.rgbColor = w.rgb.saved.color;
                         w.rgbFollow = w.rgb.saved.follow === true;
+                        w.rgbSource = w.rgb.saved.source || "accent";
                     }
                     w.rgbLoaded = true;
                 } catch (e) { }
@@ -211,12 +276,14 @@ PanelWindow {
     property int rgbSpeed: 5
     property string rgbColor: "ffffff"
     property bool rgbFollow: false        // подсветка следует акценту темы (theme.sh → rgb.sh theme); выкл — автономно, своим цветом
-    readonly property string accentHex: String(Theme.accent).replace("#", "").slice(-6)
+    property string rgbSource: "accent"   // какой цвет темы берёт подсветка: accent — акцент 1, accent2 — акцент 2 (оба меняет автоцвет от обоев)
+    readonly property string accentHex: String(rgbSource === "accent2" ? Theme.accent2 : Theme.accent).replace("#", "").slice(-6)
     function setFollow(on) {
         rgbFollow = on;
-        rgbRun([rgbScript, "follow", on ? "on" : "off", accentHex]);
+        rgbRun([rgbScript, "follow", on ? "on" : "off", accentHex, rgbSource]);
         if (on) { rgbColor = accentHex; rgbNote = Tr.t("Подсветка следует цвету темы"); }
     }
+    function setSource(src) { rgbSource = src; if (rgbFollow) setFollow(true); }
     property var rgbPending: null
     Process {
         id: rgbSet
@@ -340,9 +407,8 @@ PanelWindow {
         return DesktopEntries.byId(name) || DesktopEntries.byId(base) || DesktopEntries.heuristicLookup(base);
     }
     function iconOf(x) {
-        var e = x.pkgs.length > 0 ? entryOf(x.pkgs[0]) : null, n = e ? e.icon : "";
-        if (n && n.charAt(0) === "/") return "file://" + n;
-        return Quickshell.iconPath(n || "", true) || Quickshell.iconPath("package-x-generic", true) || Quickshell.iconPath("application-x-executable", true);
+        var e = x.pkgs.length > 0 ? entryOf(x.pkgs[0]) : null;
+        return Icons.app(e ? e.icon : "", "package-x-generic");
     }
     function togglePick(x) {
         var p = Object.assign({}, picked), k = x.cat + ":" + x.key;
@@ -404,16 +470,6 @@ PanelWindow {
                     Text { text: w.totalInstalled + Tr.t(" из ") + w.totalItems + Tr.t(" · занято ") + w.totalSize + Tr.t(" · обновлений ") + w.updates.length; color: Theme.sub; font.family: Theme.font; font.pixelSize: 10 }
                 }
             }
-            GSegment {
-                ui: Theme
-                width: Math.min(820, parent.width - 340)
-                anchors { right: topClose.left; rightMargin: 10; verticalCenter: parent.verticalCenter }
-                options: [{ v: "0", t: Tr.t("Программы"), icon: "󰏖" }, { v: "1", t: Tr.t("Обновления") + (w.updates.length ? " " + w.updates.length : ""), icon: "󰚰" },
-                          { v: "2", t: Tr.t("Патчи"), icon: "󰒓" }, { v: "3", t: Tr.t("Компьютер"), icon: "󰌢" }, { v: "4", t: Tr.t("Устройства"), icon: "󰾰" },
-                          { v: "5", t: Tr.t("Подсветка"), icon: "󰌌" }, { v: "6", t: Tr.t("Система"), icon: "󰋊" }]
-                value: String(w.ptab)
-                onPicked: (v) => { w.ptab = Number(v); w.loadTab(); }
-            }
             GTile {
                 id: topClose
                 ui: Theme
@@ -424,10 +480,55 @@ PanelWindow {
             }
         }
 
+        // ---------- вкладки: отдельной строкой под заголовком — у каждой значок и подпись одного размера, числа — цветной меткой ----------
+        Flickable {
+            id: tabBar
+            x: 18; y: 58
+            width: parent.width - 36; height: 40
+            contentWidth: tabRow.implicitWidth
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            Row {
+                id: tabRow
+                spacing: 6
+                Repeater {
+                    model: [{ v: 0, t: Tr.t("Программы"), icon: "󰏖" }, { v: 1, t: Tr.t("Обновления"), icon: "󰚰", n: w.updates.length },
+                            { v: 2, t: Tr.t("Патчи"), icon: "󰒓" }, { v: 3, t: Tr.t("Компьютер"), icon: "󰌢" }, { v: 4, t: Tr.t("Устройства"), icon: "󰾰" },
+                            { v: 5, t: Tr.t("Подсветка"), icon: "󰌌" }, { v: 6, t: Tr.t("Система"), icon: "󰋊" },
+                            { v: 7, t: Tr.t("Иконки"), icon: "󰀻" }, { v: 8, t: Tr.t("Драйверы"), icon: "󰢮", n: w.drv.missing || 0, warn: true }]
+                    Rectangle {
+                        id: tab
+                        required property var modelData
+                        readonly property bool cur: w.ptab === modelData.v
+                        width: tabIn.implicitWidth + 24; height: 36; radius: 18
+                        color: cur ? Theme.accent : (tabMa.containsMouse ? Theme.fill(0.12) : Theme.fill(0.05))
+                        border.width: cur || Theme.ios ? 0 : 1; border.color: Theme.line(0.10)
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Row {
+                            id: tabIn
+                            anchors.centerIn: parent
+                            spacing: 7
+                            Text { anchors.verticalCenter: parent.verticalCenter; text: tab.modelData.icon; color: tab.cur ? "white" : Theme.text; font.family: Theme.iconFont; font.pixelSize: 15 }
+                            Text { anchors.verticalCenter: parent.verticalCenter; text: tab.modelData.t; color: tab.cur ? "white" : Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.Medium }
+                            Rectangle {
+                                visible: (tab.modelData.n || 0) > 0
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: Math.max(18, cnt.implicitWidth + 10); height: 18; radius: 9
+                                readonly property color c: tab.modelData.warn ? Theme.yellow : Theme.accent2
+                                color: tab.cur ? Qt.rgba(1, 1, 1, 0.25) : Qt.rgba(c.r, c.g, c.b, 0.25)
+                                Text { id: cnt; anchors.centerIn: parent; text: tab.modelData.n || 0; color: tab.cur ? "white" : parent.c; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.Bold }
+                            }
+                        }
+                        MouseArea { id: tabMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: { w.ptab = tab.modelData.v; w.loadTab(); } }
+                    }
+                }
+            }
+        }
+
         // ---------- обновления ----------
         Item {
             visible: w.ptab === 1
-            anchors { fill: parent; topMargin: 66; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
+            anchors { fill: parent; topMargin: 108; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
             Row {
                 id: updHead
                 spacing: 10
@@ -467,7 +568,7 @@ PanelWindow {
         // ---------- патчи: настройки установщика ----------
         Flickable {
             visible: w.ptab === 2
-            anchors { fill: parent; topMargin: 66; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
+            anchors { fill: parent; topMargin: 108; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
             contentHeight: patchCol.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
@@ -522,7 +623,7 @@ PanelWindow {
         // ---------- компьютер: железо и память ----------
         Flickable {
             visible: w.ptab === 3
-            anchors { fill: parent; topMargin: 66; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
+            anchors { fill: parent; topMargin: 108; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
             contentHeight: compCol.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
@@ -621,7 +722,7 @@ PanelWindow {
         // ---------- устройства: как диспетчер устройств ----------
         Flickable {
             visible: w.ptab === 4
-            anchors { fill: parent; topMargin: 66; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
+            anchors { fill: parent; topMargin: 108; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
             contentHeight: devCol.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
@@ -690,10 +791,362 @@ PanelWindow {
             }
         }
 
+        // ---------- иконки — как «Обои»: мои темы, каталог, библиотека значков; поиск и сетка карточек под ширину окна ----------
+        Item {
+            id: icTab
+            visible: w.ptab === 7
+            anchors { fill: parent; topMargin: 108; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
+            property string view: "mine"                 // mine | catalog | library
+            property string q: ""
+            readonly property var mine: (w.icons.installed || []).filter(function (t) { return icTab.q === "" || (t.name + " " + t.id).toLowerCase().indexOf(icTab.q) >= 0; })
+            readonly property var cat: (w.icons.catalog || []).filter(function (t) { return !t.installed && (icTab.q === "" || (t.id + " " + t.about + " " + t.pkg).toLowerCase().indexOf(icTab.q) >= 0); })
+
+            // верх: вид, поиск, состояние
+            Row {
+                id: icHead
+                width: parent.width
+                spacing: 10
+                GSegment {
+                    ui: Theme
+                    width: 540
+                    options: [{ v: "mine", t: Tr.t("Мои темы") + " " + (w.icons.installed || []).length, icon: "󰀻" },
+                              { v: "catalog", t: Tr.t("Пакеты"), icon: "󰇚" }, { v: "store", t: "gnome-look", icon: "󰖟" }, { v: "library", t: Tr.t("Значки"), icon: "󰋩" }]
+                    value: icTab.view
+                    onPicked: (v) => {
+                        icTab.view = v;
+                        if (v === "library" && w.iconHits.length === 0) w.findIcons("");
+                        if (v === "store" && w.store.length === 0) w.loadStore(icTab.q, false);
+                    }
+                }
+                Rectangle {
+                    width: parent.width - 540 - 10 - icState.width - 10; height: 36; radius: 18
+                    color: Theme.fill(0.07); border.width: 1; border.color: icSearch.activeFocus ? Theme.accent : Theme.line(0.16)
+                    Text { x: 14; anchors.verticalCenter: parent.verticalCenter; text: "󰍉"; color: Theme.sub; font.family: Theme.iconFont; font.pixelSize: 14 }
+                    TextInput {
+                        id: icSearch
+                        anchors { fill: parent; leftMargin: 36; rightMargin: 14 }
+                        verticalAlignment: TextInput.AlignVCenter; clip: true; selectByMouse: true
+                        color: Theme.text; font.family: Theme.font; font.pixelSize: 13
+                        onTextChanged: { icTab.q = text.trim().toLowerCase(); if (icTab.view === "library" || icTab.view === "store") libT.restart(); }
+                        Text { visible: icSearch.text === ""; anchors.verticalCenter: parent.verticalCenter; text: icTab.view === "library" ? Tr.t("значок: firefox, folder, terminal…") : (icTab.view === "store" ? Tr.t("поиск по gnome-look: tela, colloid…") : Tr.t("тема: papirus, tela…")); color: Theme.sub; font: icSearch.font }
+                    }
+                    Timer { id: libT; interval: 450; onTriggered: { if (icTab.view === "store") w.loadStore(icTab.q, false); else w.findIcons(icTab.q); } }
+                }
+                Text {
+                    id: icState
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: w.iconNote !== "" ? w.iconNote : Tr.t("Сейчас: ") + (w.icons.current || "—")
+                    color: w.iconNote !== "" ? Theme.accent : Theme.sub; font.family: Theme.font; font.pixelSize: 12
+                }
+            }
+
+            // мои темы: крупные карточки с восемью образцами, применяются нажатием
+            GridView {
+                id: mineGrid
+                visible: icTab.view === "mine"
+                anchors { top: icHead.bottom; topMargin: 14; left: parent.left; right: parent.right; bottom: parent.bottom }
+                clip: true
+                cellWidth: Math.floor(width / Math.max(2, Math.floor(width / 270)))
+                cellHeight: 168
+                boundsBehavior: Flickable.StopAtBounds
+                model: icTab.mine
+                delegate: Item {
+                    id: thc
+                    required property var modelData
+                    readonly property bool cur: modelData.id === w.icons.current
+                    width: mineGrid.cellWidth; height: mineGrid.cellHeight
+                    Rectangle {
+                        anchors { fill: parent; margins: 6 }
+                        radius: Theme.r(18)
+                        color: thMa.containsMouse ? Theme.fill(0.13) : Theme.fill(0.06)
+                        border.width: thc.cur ? 2 : (Theme.ios ? 0 : 1); border.color: thc.cur ? Theme.accent : Theme.line(0.12)
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Grid {
+                            x: 14; y: 14
+                            columns: 4; spacing: 10
+                            Repeater {
+                                model: thc.modelData.preview || []
+                                Image { required property string modelData; width: 38; height: 38; sourceSize: Qt.size(38, 38); source: "file://" + modelData; asynchronous: true }
+                            }
+                        }
+                        Text { x: 14; anchors { bottom: parent.bottom; bottomMargin: 30 } width: parent.width - 28; elide: Text.ElideRight; text: thc.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                        Text { x: 14; anchors { bottom: parent.bottom; bottomMargin: 12 } text: thc.cur ? Tr.t("✓ используется") : (thMa.containsMouse ? Tr.t("нажмите, чтобы применить") : thc.modelData.id); color: thc.cur ? Theme.accent : Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                        MouseArea { id: thMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: if (!thc.cur) w.setIconTheme(thc.modelData.id) }
+                    }
+                }
+            }
+
+            // каталог: темы, которые ставятся пакетом
+            GridView {
+                id: catGrid
+                visible: icTab.view === "catalog"
+                anchors { top: icHead.bottom; topMargin: 14; left: parent.left; right: parent.right; bottom: parent.bottom }
+                clip: true
+                cellWidth: Math.floor(width / Math.max(2, Math.floor(width / 300)))
+                cellHeight: 128
+                boundsBehavior: Flickable.StopAtBounds
+                model: icTab.cat
+                delegate: Item {
+                    id: cc
+                    required property var modelData
+                    width: catGrid.cellWidth; height: catGrid.cellHeight
+                    Rectangle {
+                        anchors { fill: parent; margins: 6 }
+                        radius: Theme.r(18)
+                        color: Theme.fill(0.06); border.width: Theme.ios ? 0 : 1; border.color: Theme.line(0.12)
+                        Column {
+                            x: 14; y: 12; width: parent.width - 28
+                            spacing: 4
+                            Text { width: parent.width; elide: Text.ElideRight; text: cc.modelData.id; color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                            Text { width: parent.width; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight; text: cc.modelData.about; color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                            Text { text: Tr.t("пакет ") + cc.modelData.pkg; color: Theme.sub; opacity: 0.7; font.family: Theme.font; font.pixelSize: 10 }
+                        }
+                        GButton {
+                            anchors { right: parent.right; rightMargin: 12; bottom: parent.bottom; bottomMargin: 12 }
+                            ui: Theme; height: 32; label: Tr.t("Установить"); icon: "󰇚"; on: true
+                            enabled: w.busy === ""
+                            onClicked: w.install([{ cat: "search", key: cc.modelData.pkg }])
+                        }
+                    }
+                }
+                Text {
+                    visible: icTab.cat.length === 0
+                    anchors.centerIn: parent
+                    text: Tr.t("Все темы каталога уже установлены — они в «Мои темы»")
+                    color: Theme.sub; font.family: Theme.font; font.pixelSize: 13
+                }
+            }
+
+            // gnome-look.org: сборки людей; источник и автор — на карточке, нажатие на источник открывает страницу
+            GridView {
+                id: storeGrid
+                visible: icTab.view === "store"
+                anchors { top: icHead.bottom; topMargin: 14; left: parent.left; right: parent.right; bottom: parent.bottom }
+                clip: true
+                cellWidth: Math.floor(width / Math.max(2, Math.floor(width / 300)))
+                cellHeight: 262
+                boundsBehavior: Flickable.StopAtBounds
+                model: w.store
+                onAtYEndChanged: if (atYEnd && !w.storeLoading && w.store.length > 0 && w.store.length < w.storeTotal) w.loadStore(w.storeQuery, true)
+                delegate: Item {
+                    id: sc
+                    required property var modelData
+                    width: storeGrid.cellWidth; height: storeGrid.cellHeight
+                    Rectangle {
+                        anchors { fill: parent; margins: 6 }
+                        radius: Theme.r(18); clip: true
+                        color: scMa.containsMouse ? Theme.fill(0.12) : Theme.fill(0.06)
+                        border.width: Theme.ios ? 0 : 1; border.color: Theme.line(0.12)
+                        MouseArea { id: scMa; anchors.fill: parent; hoverEnabled: true }
+                        Rectangle {
+                            x: 8; y: 8; width: parent.width - 16; height: 132; radius: Theme.r(12); clip: true
+                            color: Theme.fill(0.08)
+                            Image { anchors.fill: parent; source: sc.modelData.preview || ""; fillMode: Image.PreserveAspectCrop; asynchronous: true; cache: true; sourceSize.width: 400 }
+                        }
+                        Column {
+                            x: 12; y: 148; width: parent.width - 24; spacing: 2
+                            Text { width: parent.width; elide: Text.ElideRight; text: sc.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                            Text { width: parent.width; elide: Text.ElideRight; text: "󰀄 " + sc.modelData.author + "  ·  󰓎 " + (sc.modelData.score / 10).toFixed(1) + "  ·  󰇚 " + Math.round(sc.modelData.downloads / 1000) + Tr.t(" тыс."); color: Theme.sub; font.family: Theme.iconFont; font.pixelSize: 10 }
+                            Text { width: parent.width; elide: Text.ElideRight; maximumLineCount: 1; text: sc.modelData.summary; color: Theme.sub; opacity: 0.8; font.family: Theme.font; font.pixelSize: 10 }
+                        }
+                        Row {
+                            anchors { left: parent.left; leftMargin: 10; right: parent.right; rightMargin: 10; bottom: parent.bottom; bottomMargin: 10 }
+                            spacing: 6
+                            GButton {
+                                ui: Theme; height: 30; on: true
+                                width: parent.width - srcBtn.width - 6; implicitWidth: width
+                                enabled: w.storeBusy === "" && (sc.modelData.files || []).length > 0
+                                icon: w.storeBusy === String(sc.modelData.id) ? "󰑓" : "󰇚"
+                                label: w.storeBusy === String(sc.modelData.id) ? Tr.t("Ставлю…") : ((sc.modelData.files || []).length > 0 ? Tr.t("Установить") : Tr.t("Только исходники"))
+                                onClicked: w.installStore(sc.modelData)
+                            }
+                            // источник: страница сборки на gnome-look.org
+                            GButton { id: srcBtn; ui: Theme; height: 30; icon: "󰖟"; label: "gnome-look"; onClicked: Qt.openUrlExternally(sc.modelData.url) }
+                        }
+                    }
+                }
+                footer: Text {
+                    width: storeGrid.width; horizontalAlignment: Text.AlignHCenter; topPadding: 10; bottomPadding: 10
+                    text: w.storeLoading ? Tr.t("Загружаю каталог…") : (w.store.length ? Tr.t("Источник: gnome-look.org (pling) · ") + w.store.length + Tr.t(" из ") + w.storeTotal : Tr.t("Ничего не найдено"))
+                    color: Theme.sub; font.family: Theme.font; font.pixelSize: 11
+                }
+            }
+
+            // библиотека значков: поиск по текущей теме; нажатие — замена значка выбранного приложения или копирование имени
+            Item {
+                visible: icTab.view === "library"
+                anchors { top: icHead.bottom; topMargin: 14; left: parent.left; right: parent.right; bottom: parent.bottom }
+                Row {
+                    id: libHead
+                    width: parent.width; spacing: 8
+                    Rectangle {
+                        width: 260; height: 34; radius: 17
+                        color: Theme.fill(0.07); border.width: 1; border.color: appIn.activeFocus ? Theme.accent : Theme.line(0.16)
+                        TextInput {
+                            id: appIn
+                            anchors { fill: parent; leftMargin: 14; rightMargin: 14 }
+                            verticalAlignment: TextInput.AlignVCenter; clip: true; selectByMouse: true
+                            color: Theme.text; font.family: Theme.font; font.pixelSize: 12
+                            onTextChanged: w.iconFor = text.trim()
+                            onAccepted: { var t = text.trim(); if (t !== "" && w.iconFor !== "" && icSearch.text.trim().charAt(0) === "/") Icons.setOverride(w.iconFor, icSearch.text.trim()); }
+                            Text { visible: appIn.text === ""; anchors.verticalCenter: parent.verticalCenter; text: Tr.t("заменить значок приложения: firefox"); color: Theme.sub; font: appIn.font }
+                        }
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - 268; elide: Text.ElideRight
+                        text: w.iconFor !== "" ? Tr.t("Нажмите значок — он станет значком «") + w.iconFor + Tr.t("»; свой файл — путь /… в поиске и Enter здесь")
+                                               : Tr.t("Нажмите значок — имя скопируется. Чтобы заменить значок приложения, введите его имя слева")
+                        color: Theme.sub; font.family: Theme.font; font.pixelSize: 11
+                    }
+                }
+                // свои замены
+                Flow {
+                    id: ovrFlow
+                    anchors { top: libHead.bottom; topMargin: 10; left: parent.left; right: parent.right }
+                    spacing: 6
+                    Repeater {
+                        model: Object.keys(Icons.overrides)
+                        Rectangle {
+                            required property string modelData
+                            width: ovr.implicitWidth + 54; height: 32; radius: 16
+                            color: Theme.fill(0.08)
+                            Image { x: 6; anchors.verticalCenter: parent.verticalCenter; width: 22; height: 22; sourceSize: Qt.size(22, 22); source: Icons.app(parent.modelData) }
+                            Text { id: ovr; x: 32; anchors.verticalCenter: parent.verticalCenter; text: parent.modelData + " → " + Icons.overrides[parent.modelData]; color: Theme.text; font.family: Theme.font; font.pixelSize: 11 }
+                            Text {
+                                anchors { right: parent.right; rightMargin: 8; verticalCenter: parent.verticalCenter }
+                                text: "󰅖"; color: Theme.sub; font.family: Theme.iconFont; font.pixelSize: 12
+                                MouseArea { anchors.fill: parent; anchors.margins: -6; cursorShape: Qt.PointingHandCursor; onClicked: Icons.setOverride(parent.parent.modelData, "") }
+                            }
+                        }
+                    }
+                }
+                GridView {
+                    id: libGrid
+                    anchors { top: ovrFlow.bottom; topMargin: 10; left: parent.left; right: parent.right; bottom: parent.bottom }
+                    clip: true
+                    cellWidth: Math.floor(width / Math.max(4, Math.floor(width / 96)))
+                    cellHeight: 96
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: w.iconHits
+                    delegate: Item {
+                        id: iconHit
+                        required property var modelData
+                        width: libGrid.cellWidth; height: libGrid.cellHeight
+                        Rectangle {
+                            anchors { fill: parent; margins: 4 }
+                            radius: Theme.r(12)
+                            color: hMa.containsMouse ? Theme.fill(0.14) : Theme.fill(0.05)
+                            Image { anchors { horizontalCenter: parent.horizontalCenter; top: parent.top; topMargin: 10 } width: 42; height: 42; sourceSize: Qt.size(42, 42); source: "file://" + iconHit.modelData.path; asynchronous: true }
+                            Text { anchors { bottom: parent.bottom; bottomMargin: 8; horizontalCenter: parent.horizontalCenter } width: parent.width - 8; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideMiddle; text: iconHit.modelData.name; color: Theme.sub; font.family: Theme.font; font.pixelSize: 9 }
+                            MouseArea {
+                                id: hMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (w.iconFor !== "") { Icons.setOverride(w.iconFor, iconHit.modelData.name); w.iconNote = Tr.t("Значок «") + w.iconFor + Tr.t("» заменён"); }
+                                    else { Quickshell.clipboardText = iconHit.modelData.name; w.iconNote = Tr.t("Имя скопировано: ") + iconHit.modelData.name; }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---------- драйверы видеокарт и процессора ----------
+        Flickable {
+            visible: w.ptab === 8
+            anchors { fill: parent; topMargin: 108; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
+            contentHeight: drvCol.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            Column {
+                id: drvCol
+                width: parent.width
+                spacing: 12
+                Text {
+                    width: parent.width; wrapMode: Text.WordWrap
+                    text: w.drv.missing > 0 ? Tr.t("Не хватает драйверов: ") + w.drv.missing + Tr.t(" — можно поставить одной кнопкой") : Tr.t("Все нужные драйверы установлены")
+                    color: w.drv.missing > 0 ? Theme.yellow : Theme.green; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold
+                }
+                Row {
+                    spacing: 8
+                    GButton {
+                        ui: Theme; icon: "󰇚"; on: true; label: Tr.t("Установить всё (терминал)")
+                        enabled: w.busy === ""
+                        onClicked: w.runTerm(Tr.t("драйверы"), ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Драйверы"), "sh", "-c", "\"$0\"; echo; read -rp 'Готово. Enter — закрыть ' _", w.driverScript])
+                    }
+                    GButton {
+                        ui: Theme; icon: "󰒓"; label: Tr.t("Диагностика")
+                        enabled: w.busy === ""
+                        onClicked: w.runTerm(Tr.t("диагностика драйверов"), ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Драйверы — диагностика"), "sh", "-c", "\"$0\" --check; echo; read -rp 'Enter — закрыть ' _", w.driverScript])
+                    }
+                    GButton { ui: Theme; icon: "󰑐"; label: Tr.t("Обновить"); onClicked: { drvProc.running = false; drvProc.running = true; } }
+                }
+                // процессор
+                Item {
+                    width: drvCol.width; height: 58
+                    visible: (w.drv.cpu || {}).ucode !== undefined && (w.drv.cpu || {}).ucode !== ""
+                    Rectangle { anchors.fill: parent; radius: Theme.r(14); color: Theme.fill(0.06); border.width: Theme.ios ? 0 : 1; border.color: Theme.line(0.12) }
+                    Rectangle { x: 14; anchors.verticalCenter: parent.verticalCenter; width: 10; height: 10; radius: 5; color: (w.drv.cpu || {}).installed ? Theme.green : Theme.yellow }
+                    Column {
+                        anchors { left: parent.left; leftMargin: 34; right: cpuBtn.left; rightMargin: 10; verticalCenter: parent.verticalCenter }
+                        Text { width: parent.width; elide: Text.ElideRight; text: Tr.t("Процессор: ") + ((w.drv.cpu || {}).model || ""); color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                        Text { text: Tr.t("микрокод ") + ((w.drv.cpu || {}).ucode || "") + ((w.drv.cpu || {}).installed ? Tr.t(" — установлен") : Tr.t(" — исправления ошибок процессора, нужен")); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                    }
+                    GButton {
+                        id: cpuBtn
+                        visible: !(w.drv.cpu || {}).installed
+                        anchors { right: parent.right; rightMargin: 10; verticalCenter: parent.verticalCenter }
+                        ui: Theme; height: 32; label: Tr.t("Установить"); icon: "󰇚"
+                        enabled: w.busy === ""
+                        onClicked: w.install([{ cat: "search", key: w.drv.cpu.ucode }])
+                    }
+                }
+                // видеокарты: что найдено, какая ветка драйвера, каких пакетов нет
+                Repeater {
+                    model: w.drv.gpus || []
+                    Item {
+                        id: gpuCard
+                        required property var modelData
+                        readonly property var miss: (modelData.pkgs || []).filter(function (p) { return !p.installed; })
+                        width: drvCol.width; height: gcol.implicitHeight + 24
+                        Rectangle { anchors.fill: parent; radius: Theme.r(14); color: Theme.fill(0.06); border.width: Theme.ios ? 0 : 1; border.color: Theme.line(0.12) }
+                        Rectangle { x: 14; y: 18; width: 10; height: 10; radius: 5; color: gpuCard.modelData.ok ? Theme.green : Theme.yellow }
+                        Column {
+                            id: gcol
+                            x: 34; y: 12; width: parent.width - 48
+                            spacing: 6
+                            Text { width: parent.width; elide: Text.ElideRight; text: ({ nvidia: "NVIDIA", intel: "Intel", amd: "AMD" })[gpuCard.modelData.vendor] + " · " + gpuCard.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
+                            Text { width: parent.width; wrapMode: Text.WordWrap; text: gpuCard.modelData.note + (gpuCard.modelData.vendor === "nvidia" && gpuCard.modelData.working === false ? Tr.t(" · драйвер сейчас не работает") : ""); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                            Flow {
+                                width: parent.width; spacing: 6
+                                Repeater {
+                                    model: gpuCard.modelData.pkgs || []
+                                    Badge { required property var modelData; text: modelData.name + (modelData.aur ? " · AUR" : ""); tint: modelData.installed ? Theme.green : Theme.yellow; anchors.verticalCenter: undefined }
+                                }
+                            }
+                            GButton {
+                                visible: gpuCard.miss.length > 0 && gpuCard.modelData.vendor !== "nvidia"
+                                ui: Theme; height: 32; label: Tr.t("Поставить недостающее: ") + gpuCard.miss.length; icon: "󰇚"
+                                enabled: w.busy === ""
+                                onClicked: w.install(gpuCard.miss.map(function (p) { return { cat: "search", key: p.name }; }))
+                            }
+                            Text {
+                                visible: gpuCard.miss.length > 0 && gpuCard.modelData.vendor === "nvidia"
+                                width: parent.width; wrapMode: Text.WordWrap
+                                text: Tr.t("NVIDIA ставится через «Установить всё»: там же убираются конфликтующие пакеты, включается KMS и пересобирается initramfs")
+                                color: Theme.sub; font.family: Theme.font; font.pixelSize: 11
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // ---------- подсветка и её драйверы ----------
         Flickable {
             visible: w.ptab === 5
-            anchors { fill: parent; topMargin: 66; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
+            anchors { fill: parent; topMargin: 108; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
             contentHeight: rgbCol.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
@@ -740,13 +1193,6 @@ PanelWindow {
                     }
                 }
                 // источник цвета: тема или свой
-                GSwitch {
-                    ui: Theme; width: parent.width
-                    label: Tr.t("Цвет темы")
-                    sub: w.rgbFollow ? Tr.t("подсветка меняет цвет вместе с темой и обоями (статичный и «дыхание»)") : Tr.t("автономно: свой цвет и эффект, тема на подсветку не влияет")
-                    checked: w.rgbFollow
-                    onToggled: (v) => w.setFollow(v)
-                }
                 // эффект
                 Text { text: Tr.t("Эффект"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.7 }
                 GSegment {
@@ -785,6 +1231,12 @@ PanelWindow {
                         }
                     }
                 }
+                Text {
+                    width: parent.width; wrapMode: Text.WordWrap
+                    text: w.rgbFollow ? Tr.t("Подсветка следует за цветом темы ") + (w.rgbSource === "accent2" ? "A2" : "A") + Tr.t(" — меняется вместе с автоцветом от обоев. Другой цвет — свой, постоянный.")
+                                      : Tr.t("A и A2 — цвета темы: подсветка будет меняться вместе с автоцветом от обоев. Остальные — свой постоянный цвет.")
+                    color: Theme.sub; font.family: Theme.font; font.pixelSize: 11
+                }
                 Flow {
                     width: parent.width
                     spacing: 8
@@ -794,7 +1246,9 @@ PanelWindow {
                         Rectangle {
                             required property string modelData
                             required property int index
-                            readonly property bool cur: w.rgbEffect !== "gradient" && w.rgbColor.toLowerCase() === modelData.toLowerCase()
+                            // A и A2 — цвета темы: выбраны, пока подсветка следует за ними; остальные — свой цвет
+                            readonly property bool cur: w.rgbEffect !== "gradient" && (index < 2 ? (w.rgbFollow && w.rgbSource === (index === 0 ? "accent" : "accent2"))
+                                                                                                  : (!w.rgbFollow && w.rgbColor.toLowerCase() === modelData.toLowerCase()))
                             readonly property bool mine: index >= 12
                             width: 44; height: 44; radius: 22
                             color: "#" + modelData
@@ -808,6 +1262,8 @@ PanelWindow {
                                     // правый клик по своему цвету — убрать его
                                     if (m.button === Qt.RightButton && parent.mine) { var c = Config.store.rgb.custom.slice(); c.splice(parent.index - 12, 1); Config.set("rgb.custom", c); return; }
                                     if (w.rgbEffect === "gradient") { Config.set("rgb.gradient", (Config.store.rgb.gradient || []).concat([parent.modelData])); w.applyEffect(); }
+                                    // A / A2: подсветка следует за цветом темы (меняется вместе с автоцветом от обоев)
+                                    else if (parent.index < 2) { w.rgbSource = parent.index === 0 ? "accent" : "accent2"; w.setFollow(true); }
                                     else w.setRgb(parent.modelData, w.rgbBright);
                                 }
                             }
@@ -888,7 +1344,7 @@ PanelWindow {
                 }
                 Row {
                     spacing: 8
-                    GButton { ui: Theme; icon: "󰏘"; label: Tr.t("Цвет темы"); onClicked: { w.rgbEffect = "static"; w.setRgb(String(Theme.accent).substring(1), w.rgbBright); } }
+                    GButton { ui: Theme; icon: "󰏘"; label: Tr.t("Цвет темы"); onClicked: { w.rgbEffect = "static"; w.rgbSource = "accent"; w.setFollow(true); } }
                     GButton { ui: Theme; icon: "󰹏"; label: Tr.t("Выключить"); onClicked: { w.rgbEffect = "static"; w.rgbRun([w.rgbScript, "off"]); } }
                     GButton { ui: Theme; icon: "󰑓"; label: Tr.t("Найти устройства заново"); onClicked: rgbProc.running = true }
                 }
@@ -899,7 +1355,7 @@ PanelWindow {
         // ---------- система: обслуживание ----------
         Flickable {
             visible: w.ptab === 6
-            anchors { fill: parent; topMargin: 66; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
+            anchors { fill: parent; topMargin: 108; leftMargin: 18; rightMargin: 18; bottomMargin: 16 }
             contentHeight: sysCol.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
@@ -993,9 +1449,9 @@ PanelWindow {
         Item {
             id: side
             visible: w.ptab === 0
-            x: 14; y: 66
+            x: 14; y: 108
             width: 230
-            height: parent.height - 80
+            height: parent.height - 122
 
             Row {
                 id: brand
@@ -1051,7 +1507,7 @@ PanelWindow {
         Item {
             id: main
             visible: w.ptab === 0
-            anchors { left: side.right; leftMargin: 16; right: parent.right; rightMargin: 16; top: parent.top; topMargin: 66; bottom: parent.bottom; bottomMargin: 14 }
+            anchors { left: side.right; leftMargin: 16; right: parent.right; rightMargin: 16; top: parent.top; topMargin: 108; bottom: parent.bottom; bottomMargin: 14 }
 
             // шапка: поиск, фильтр, обновить, закрыть
             Item {

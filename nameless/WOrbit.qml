@@ -73,8 +73,10 @@ WCard {
                     Text { width: parent.width; elide: Text.ElideRight; text: row.modelData.name || ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
                     Text {
                         width: parent.width; elide: Text.ElideRight
-                        text: (row.modelData.address ? row.modelData.address + " · " : "") + (row.modelData.online ? Tr.t("󰌷 подключено") + (row.modelData.battery >= 0 ? " · " + row.modelData.battery + "%" + (row.modelData.charging ? Tr.t(" · заряжается") : "") : "")) : (row.modelData.pairing ? Tr.t("ждёт сопряжения") : row.modelData.paired ? Tr.t("сопряжено · не подключено") : Tr.t("рядом · не сопряжено")))
-                        color: row.modelData.online && row.modelData.battery >= 0 && row.modelData.battery < 20 && !row.modelData.charging ? Theme.red : Theme.sub
+                        text: (row.modelData.address ? row.modelData.address + " · " : "")
+                              + (row.modelData.online ? Tr.t("󰌷 подключено") + ((row.modelData.battery >= 0 && ["phone", "tablet", "laptop"].indexOf(row.modelData.kind) >= 0) ? " · " + row.modelData.battery + "%" + (row.modelData.charging ? Tr.t(" · заряжается") : "") : "")
+                                 : (row.modelData.pairing ? Tr.t("ждёт сопряжения") : (row.modelData.paired ? Tr.t("сопряжено · не подключено") : Tr.t("рядом · не сопряжено"))))
+                        color: row.modelData.online && (row.modelData.battery >= 0 && ["phone", "tablet", "laptop"].indexOf(row.modelData.kind) >= 0) && row.modelData.battery < 20 && !row.modelData.charging ? Theme.red : Theme.sub
                         font.family: Theme.font; font.pixelSize: 11
                     }
                 }

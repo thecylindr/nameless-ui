@@ -18,8 +18,8 @@ import Quickshell.Widgets
 //   • Луна в настоящей фазе: моря, кратеры, пепельный свет тёмной части; сумерки и рассвет по времени суток
 // Экономия: мерцание и метеоры стоят, пока рабочий стол закрыт окнами, и при батарее ниже 25 %
 Variants {
-    // на виртуальном мониторе (второй экран) живое небо не рисуется: 60 кадров в секунду там тратили видеокарту впустую и мешали кодеру показа
-    model: Quickshell.screens.filter(function (s) { return String(s.name).indexOf("HEADLESS") !== 0; })
+    // на втором экране Orbit небо есть, но неподвижное (см. virt): раньше живое небо там тратило видеокарту и мешало кодеру показа
+    model: Compositor.screens
 
     PanelWindow {
         id: sky
@@ -43,7 +43,9 @@ Variants {
         // ---------- когда анимировать ----------
         readonly property bool covered: Compositor.covered
         readonly property bool lowBattery: Sys.hasBattery && !Sys.charging && Sys.batPct < 25
-        readonly property bool live: visible && !covered && !lowBattery
+        // второй экран Orbit: небо неподвижное (одна картинка, без мерцания и метеоров) — его кодирует видеокарта для другого устройства
+        readonly property bool virt: Compositor.isVirtual(modelData)
+        readonly property bool live: visible && !covered && !lowBattery && !virt
         // мерцание: один общий шаг 15 раз в секунду вместо десятков бесконечных анимаций —
         // небо перерисовывается 15 раз в секунду, а не на каждом кадре экрана (165 Гц)
         property real tw: 0
@@ -74,7 +76,7 @@ Variants {
             id: field
             anchors.fill: parent
             renderTarget: Canvas.Image
-            readonly property string key: [sky.space, sky.mid, sky.horizon, sky.pal ? sky.pal.n1 : "", sky.pal ? sky.pal.n2 : "", sky.o.stars, sky.o.nebula,
+            readonly property string key: [sky.space, Theme.accent, sky.mid, sky.horizon, sky.pal ? sky.pal.n1 : "", sky.pal ? sky.pal.n2 : "", sky.o.stars, sky.o.nebula,
                                            sky.o.milkyway, sky.o.constellations, sky.so.bgStars, sky.so.bgNebula, sky.so.galaxies].join()
             onKeyChanged: requestPaint()
             onWidthChanged: requestPaint()
@@ -95,11 +97,13 @@ Variants {
             function paintSpace(ctx, w, h) {
                 var so = sky.so, k = so.bgStars || 1, nb = so.bgNebula === undefined ? 1 : so.bgNebula, i;
                 var bg = ctx.createRadialGradient(w * 0.5, h * 0.5, 0, w * 0.5, h * 0.5, Math.max(w, h) * 0.75);
-                bg.addColorStop(0, "#050a22"); bg.addColorStop(1, "#010208");
+                // цвета — от акцента темы (его меняет автоцвет от обоев): фон чуть подкрашен, туманности — акцент, светлее и темнее
+                var ac = Theme.accent;
+                bg.addColorStop(0, Qt.tint("#040716", Qt.rgba(ac.r, ac.g, ac.b, 0.14))); bg.addColorStop(1, Qt.tint("#010208", Qt.rgba(ac.r, ac.g, ac.b, 0.05)));
                 ctx.fillStyle = bg; ctx.fillRect(0, 0, w, h);
-                nebula(ctx, w * 0.18, h * 0.3, w * 0.3, Theme.accent2, 0.09 * nb);
-                nebula(ctx, w * 0.82, h * 0.72, w * 0.26, Theme.accent, 0.07 * nb);
-                nebula(ctx, w * 0.62, h * 0.12, w * 0.16, Qt.color("#ff6fb5"), 0.04 * nb);
+                nebula(ctx, w * 0.18, h * 0.3, w * 0.3, Qt.darker(ac, 1.4), 0.10 * nb);
+                nebula(ctx, w * 0.82, h * 0.72, w * 0.26, ac, 0.07 * nb);
+                nebula(ctx, w * 0.62, h * 0.12, w * 0.16, Qt.lighter(ac, 1.5), 0.04 * nb);
                 // далёкие галактики: спиральные и эллиптические пятнышки
                 if (so.galaxies !== false) for (i = 0; i < 14; i++) {
                     var gx = sky.rnd(i, 61) * w, gy = sky.rnd(i, 62) * h, gr = 6 + sky.rnd(i, 63) * 16;

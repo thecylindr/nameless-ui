@@ -18,6 +18,11 @@ PanelWindow {
         if (open) { Sys.refresh(); nightProc.running = true; }
         // у тех, кто настраивал шторку раньше, плитка Orbit один раз встаёт в конец малых — дальше её можно переставлять и убирать, как любую
         var cc = Config.store.control;
+        // на ноутбуке плитки «Эко-режим» и «Производительный» один раз встают в крупные карточки сверху
+        if (Sys.hasBattery && cc.powerSeeded !== true) {
+            var bg = (cc.big || []).slice(); ["eco", "perf"].forEach(function (t) { if (bg.indexOf(t) < 0 && (cc.small || []).indexOf(t) < 0) bg.push(t); });
+            Config.set("control.big", bg); Config.set("control.powerSeeded", true);
+        }
         if (cc.orbitSeeded !== true) {
             if ((cc.big || []).indexOf("orbit") < 0 && (cc.small || []).indexOf("orbit") < 0) {
                 var a = (cc.small || []).slice(); a.push("orbit"); Config.set("control.small", a);
@@ -63,7 +68,7 @@ PanelWindow {
     // ---------- реестр плиток ----------
     readonly property var all: ["wifi", "bt", "dnd", "airplane", "theme", "desktop", "display", "cosmos", "programs", "rgb",
                                 "audio", "tasks", "mic", "screenshot", "record", "recordArea", "picker", "night", "caffeine",
-                                "wallpaper", "wallpapers", "clipboard", "ocr", "profiles", "agents", "orbit", "features", "notifs", "keys", "lock"]
+                                "wallpaper", "wallpapers", "clipboard", "ocr", "profiles", "agents", "orbit", "features", "notifs", "keys", "lock", "eco", "perf"]
     readonly property var audioNames: ({ none: Tr.t("без звука"), desktop: Tr.t("звук ПК"), mic: Tr.t("микрофон"), both: Tr.t("ПК + микрофон") })
     // свойства плитки: i — значок, t — подпись, sub — состояние, on — включена, f — нажатие, rf — правый клик
     function info(id) {
@@ -111,6 +116,12 @@ PanelWindow {
                                sub: !OrbitData.enabled ? Tr.t("Выкл.") : (!OrbitData.running ? Tr.t("запускается…") : (OrbitData.requests > 0 ? Tr.t("ждёт сопряжение") : (OrbitData.connected.length > 0 ? Tr.t("Подключено: ") + OrbitData.connected.length : Tr.t("ищет устройства")))),
                                f: function () { OrbitData.toggleEnabled(); },
                                rf: function () { if (OrbitData.enabled) { w.close(); if (sh) sh.openOrbit(); } } };
+        case "eco": return { i: "󰌪", t: Tr.t("Эко-режим"), on: Power.mode === "eco",
+                             sub: Power.mode === "eco" ? Tr.t("процессор и видеокарта берегут заряд") : (Power.suggest ? Tr.t("от батареи — включить?") : Tr.t("Выкл.")),
+                             f: function () { Power.toggle("eco"); }, rf: function () { w.close(); if (sh) sh.openFeatures(); } };
+        case "perf": return { i: "󰓅", t: Tr.t("Производительный"), on: Power.mode === "perf",
+                              sub: Power.mode === "perf" ? Tr.t("процессор и видеокарта на максимум") : Tr.t("Выкл."),
+                              f: function () { Power.toggle("perf"); }, rf: function () { w.close(); if (sh) sh.openFeatures(); } };
         case "features": return { i: "󰒓", t: Tr.t("Функции"), sub: Perf.eco ? Tr.t("экономный режим") : Tr.t("технологии и установка"), f: function () { w.close(); if (sh) sh.openFeatures(); } };
         case "ocr": return { i: "󰗊", t: Tr.t("Текст с экрана"), sub: Tr.t("выделить и скопировать"), f: function () { w.act("ocr"); } };
         case "notifs": return { i: "󰂚", t: Tr.t("Уведомления"), sub: Notifs.count > 0 ? String(Notifs.count) : Tr.t("нет"), f: function () { w.close(); Notifs.centerOpen = true; } };

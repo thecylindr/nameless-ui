@@ -23,15 +23,16 @@ Item {
     property real panY: 0
     property real cx: 0
     property real cy: 0
-    property real acc: 0
-    // стол закрыт окнами — орбиты стоят и сцена не перерисовывается
-    FrameAnimation {
+    property double last: 0
+    // стол закрыт окнами — орбиты стоят и сцена не перерисовывается; шаг по таймеру с частотой Perf.fps, а не на каждом кадре монитора
+    Timer {
+        interval: Math.round(1000 / Perf.fps)
+        repeat: true
         running: as.visible && !Compositor.covered
+        onRunningChanged: as.last = Date.now()
         onTriggered: {
-            as.acc += frameTime;
-            if (as.acc < 1 / Perf.fps) return;
-            var dt = Math.min(0.1, as.acc), k = 1 - Math.exp(-dt * 9);
-            as.acc = 0;
+            var now = Date.now(), dt = Math.min(0.1, (now - as.last) / 1000), k = 1 - Math.exp(-dt * 9);
+            as.last = now;
             as.t += dt * as.speed;
             as.zoom += (as.zoomT - as.zoom) * k;
             as.cx += (as.panX - as.cx) * k;
@@ -47,9 +48,7 @@ Item {
     }
     function iconOf(tl) {
         var app = tl.wayland ? (tl.wayland.appId || "") : "", e = app !== "" ? (DesktopEntries.byId(app) || DesktopEntries.heuristicLookup(app)) : null;
-        var n = e ? e.icon : app.toLowerCase();
-        if (n && n.charAt(0) === "/") return "file://" + n;
-        return Quickshell.iconPath(n || "", true) || Quickshell.iconPath("application-x-executable", true);
+        return Icons.app(e ? e.icon : app.toLowerCase());
     }
     // свободный номер для нового стола
     readonly property int nextWs: workspaces.reduce(function (m, w) { return Math.max(m, w.id); }, 0) + 1
@@ -238,9 +237,12 @@ Item {
                 // планета-монитор: название, разрешение
                 Rectangle {
                     width: 120; height: 120; radius: 60; x: -60; y: -60
+                    // второй экран Orbit — планета-устройство своего цвета, подписанная именем телефона или компьютера
+                    readonly property var vs: OrbitData.virtualScreens[pl.modelData.name] || null
+                    readonly property bool virt: String(pl.modelData.name).indexOf("HEADLESS") === 0
                     gradient: Gradient {
-                        GradientStop { position: 0; color: Qt.lighter(Theme.accent, 1.3) }
-                        GradientStop { position: 1; color: Qt.darker(Theme.accent2, 2.2) }
+                        GradientStop { position: 0; color: Qt.lighter(parent.virt ? Theme.teal : Theme.accent, 1.3) }
+                        GradientStop { position: 1; color: Qt.darker(parent.virt ? Theme.accent : Theme.accent2, 2.2) }
                     }
                     border.width: pl.focusedMon ? 3 : 0
                     border.color: Qt.rgba(1, 1, 1, 0.6)
@@ -251,8 +253,16 @@ Item {
                     }
                     Column {
                         anchors.centerIn: parent
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "󰍹"; color: "white"; font.family: Theme.iconFont; font.pixelSize: 26 }
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: pl.modelData.name; color: "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: !parent.parent.virt ? "󰍹" : (({ phone: "󰏲", tablet: "󰓷", laptop: "󰌢" })[(parent.parent.vs || {}).kind] || "󰍺")
+                            color: "white"; font.family: Theme.iconFont; font.pixelSize: 26
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter; width: 104; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight
+                            text: parent.parent.virt ? (parent.parent.vs ? parent.parent.vs.peer : Tr.t("Второй экран")) : pl.modelData.name
+                            color: "white"; font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold
+                        }
                         Text { anchors.horizontalCenter: parent.horizontalCenter; text: pl.modelData.width + "×" + pl.modelData.height; color: Qt.rgba(1, 1, 1, 0.75); font.family: Theme.font; font.pixelSize: 10 }
                     }
                 }

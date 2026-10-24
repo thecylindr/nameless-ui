@@ -46,9 +46,9 @@ Scope {
     })
     readonly property var links: linksAll.filter(function (l) { return !virtualSides[l.side]; })
     readonly property var screens: Quickshell.screens.filter(function (s) { return String(s.name).indexOf("HEADLESS") !== 0; })
-    // экран по имени среди всех, включая виртуальный монитор второго экрана: эффект перехода между мониторами рисуется и на нём
+    // экран по имени среди настоящих: на виртуальном мониторе второго экрана эффект не рисуется — окно на нём роняло Quickshell при удалении монитора
     function screenByName(n) {
-        var all = Quickshell.screens;
+        var all = screens;
         for (var i = 0; i < all.length; i++) if (all[i].name === n) return all[i];
         return null;
     }
@@ -188,7 +188,10 @@ Scope {
     property string monPrev: ""
     property string monFrom: ""
     property string monTo: ""
-    property double monQuiet: 0            // мониторы только что поменялись (создан или снят второй экран): Orbit сам гоняет фокус — без вспышек
+    property double monQuiet: 0
+    property string monLastFrom: ""
+    property string monLastTo: ""
+    property double monLastAt: 0            // мониторы только что поменялись (создан или снят второй экран): Orbit сам гоняет фокус — без вспышек
     Component.onCompleted: monPrev = Hyprland.focusedMonitor ? Hyprland.focusedMonitor.name : ""
     Connections {
         target: Quickshell
@@ -201,6 +204,9 @@ Scope {
             var to = String(e.data).split(",")[0], from = cross.monPrev;
             cross.monPrev = to;
             if (!cross.monOn || !from || from === to || Date.now() < cross.monQuiet) return;
+            // курсор дрожит на стыке мониторов: обратный переход быстрее 300 мс — без эффектов (иначе они сыпались подряд)
+            if (from === cross.monLastTo && to === cross.monLastFrom && Date.now() - cross.monLastAt < 300) { cross.monLastAt = Date.now(); return; }
+            cross.monLastFrom = from; cross.monLastTo = to; cross.monLastAt = Date.now();
             cross.monFrom = from;
             cross.monTo = to;
             if (!monPos.running) monPos.running = true;
@@ -222,7 +228,9 @@ Scope {
     }
     // c — положение курсора на общей раскладке (логические пиксели) или null
     function monCross(from, to, c) {
-        var a = screenByName(from), b = screenByName(to);
+        // геометрия — по всем мониторам (и виртуальному), рисуется — только на настоящих
+        function geo(n) { var all = Quickshell.screens; for (var i = 0; i < all.length; i++) if (all[i].name === n) return all[i]; return null; }
+        var a = geo(from), b = geo(to);
         if (!a || !b) return;
         // край — по взаимному положению мониторов; перекрытые (повтор экрана) пропускаются
         var side = b.x >= a.x + a.width ? "right" : (b.x + b.width <= a.x ? "left" : (b.y >= a.y + a.height ? "bottom" : (b.y + b.height <= a.y ? "top" : "")));
@@ -234,8 +242,8 @@ Scope {
             var v = vert ? (c.y - s.y) / Math.max(1, s.height) : (c.x - s.x) / Math.max(1, s.width);
             return Math.max(0.05, Math.min(0.95, v));
         }
-        show({ dir: "out", side: side, pos: along(a), screen: from });
-        show({ dir: "in", side: opp, pos: along(b), screen: to });
+        if (screenByName(from)) show({ dir: "out", side: side, pos: along(a), screen: from });
+        if (screenByName(to)) show({ dir: "in", side: opp, pos: along(b), screen: to });
     }
 
     // ---------- расстановка соседей ----------
@@ -304,6 +312,65 @@ Scope {
         }
     }
 
+    // ---------- вспомогательные действия при переходе (Config.crossing.actions) ----------
+    //   clipboard — буфер обмена уходит вслед за курсором (сразу можно вставить на том компьютере)
+    //   badge     — пока курсор там: у края светится полоска, плашка с именем компьютера и подсказкой Scroll Lock
+    //   quiet     — на это время всплывающие уведомления молчат («не беспокоить»), потом прежний режим
+    readonly property var acts: cfg.actions || ({})
+    property var away: null                 // { side, peer, screen, device } — курсор сейчас на другом компьютере
+    property bool dndBefore: false
+    function deviceFor(side) { for (var i = 0; i < linkList.length; i++) if (linkList[i].side === side) return linkList[i].device; return ""; }
+    function handleSignal(o) {
+        if (o.dir === "out" && o.peer !== undefined && !o.link) {
+            var dev = deviceFor(o.side);
+            away = { side: o.side, peer: o.peer, screen: o.screen, device: dev };
+            if (acts.clipboard !== false && dev !== "") OrbitData.sendClipboard(dev);
+            if (acts.quiet === true) { dndBefore = Notifs.dnd; Notifs.dnd = true; }
+            badgeT.restart();
+        } else if ((o.dir === "in" || o.dir === "deny") && o.peer !== undefined && away !== null) {
+            if (acts.quiet === true) Notifs.dnd = dndBefore;
+            away = null;
+        }
+        show(o);
+    }
+    Timer { id: badgeT; interval: 2600 }
+    // курсор на другом компьютере: тихая полоска у края (без анимации) и плашка на 2,6 с
+    Variants {
+        model: cross.away !== null && cross.acts.badge !== false ? [cross.away] : []
+        PanelWindow {
+            required property var modelData
+            screen: cross.screenByName(modelData.screen) || cross.screenFor(modelData.side)
+            anchors { top: true; bottom: true; left: true; right: true }
+            exclusionMode: ExclusionMode.Ignore
+            color: "transparent"
+            mask: Region {}
+            WlrLayershell.namespace: "nameless-crossing-fx"
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            readonly property bool vert: modelData.side === "left" || modelData.side === "right"
+            Rectangle {
+                x: modelData.side === "right" ? parent.width - width : 0
+                y: modelData.side === "bottom" ? parent.height - height : 0
+                width: parent.vert ? 4 : parent.width; height: parent.vert ? parent.height : 4
+                color: cross.tintOf(cross.cfg.color || "accent"); opacity: 0.55
+            }
+            Rectangle {
+                visible: badgeT.running
+                anchors.centerIn: parent
+                width: badgeRow.implicitWidth + 36; height: 48; radius: 24
+                color: Qt.rgba(Theme.base.r, Theme.base.g, Theme.base.b, 0.88)
+                border.width: 1; border.color: cross.tintOf(cross.cfg.color || "accent")
+                Row {
+                    id: badgeRow
+                    anchors.centerIn: parent; spacing: 10
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: "󰍽"; color: cross.tintOf(cross.cfg.color || "accent"); font.family: Theme.iconFont; font.pixelSize: 18 }
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: Tr.t("Курсор на «") + modelData.peer + Tr.t("»") + (cross.acts.clipboard !== false ? Tr.t(" · буфер отправлен") : ""); color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                    Text { anchors.verticalCenter: parent.verticalCenter; text: Tr.t("Scroll Lock — вернуть"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 12 }
+                }
+            }
+        }
+    }
+
     // сигнал Orbit: dbus-monitor печатает строковый аргумент отдельной строкой «string "{…}"»
     Process {
         running: cross.cfg.enabled === true && OrbitData.enabled && OrbitData.running
@@ -312,7 +379,7 @@ Scope {
             onRead: line => {
                 var i = line.indexOf("string \"");
                 if (i < 0) return;
-                try { cross.show(JSON.parse(line.slice(i + 8, line.lastIndexOf("\"")))); } catch (e) { }
+                try { cross.handleSignal(JSON.parse(line.slice(i + 8, line.lastIndexOf("\"")))); } catch (e) { }
             }
         }
     }

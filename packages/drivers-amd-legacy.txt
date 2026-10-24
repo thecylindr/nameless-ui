@@ -1,0 +1,3 @@
+# Старые AMD/ATI (TeraScale: HD 2xxx–6xxx): только OpenGL через Mesa, Vulkan нет
+mesa
+lib32-mesa

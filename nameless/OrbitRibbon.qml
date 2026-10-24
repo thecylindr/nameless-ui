@@ -25,7 +25,7 @@ PanelWindow {
     Surface {
         id: panel
         alpha: Theme.overlayAlpha
-        width: 380
+        width: 400
         height: parent.height - 60
         x: parent.width - width - 10 + (1 - w.progress) * 60
         y: 50
@@ -177,94 +177,23 @@ PanelWindow {
                     color: Theme.sub; font.family: Theme.font; font.pixelSize: 13
                 }
 
+                // устройства по группам: на связи — сверху, с подписанными действиями; сопряжённые — с кнопкой «Подключить»; рядом — «Сопрячь»
                 Repeater {
-                    model: OrbitData.devices
-                    Rectangle {
-                        id: dv
+                    model: [
+                        { t: Tr.t("На связи"), list: OrbitData.devices.filter(function (d) { return d.online; }) },
+                        { t: Tr.t("Сопряжённые"), list: OrbitData.devices.filter(function (d) { return !d.online && d.paired; }) },
+                        { t: Tr.t("Рядом"), list: OrbitData.devices.filter(function (d) { return !d.online && !d.paired; }) }
+                    ]
+                    Column {
+                        id: grp
                         required property var modelData
-                        width: body.width; height: 72 + (expanded && cmds.length > 0 ? chips.implicitHeight + 14 : 0)
-                        property bool expanded: false
-                        readonly property var cmds: modelData.commands || []
-                        Behavior on height { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-                        Item { id: head72; width: parent.width; height: 72 }
-                        radius: 16
-                        color: Qt.rgba(1, 1, 1, dvMa.containsMouse ? 0.10 : 0.05)
-                        Behavior on color { ColorAnimation { duration: 120 } }
-                        MouseArea { id: dvMa; anchors.fill: parent; hoverEnabled: true; onClicked: if (dv.cmds.length > 0) dv.expanded = !dv.expanded }
-                        Rectangle {
-                            id: dvi
-                            x: 12; anchors.verticalCenter: head72.verticalCenter
-                            width: 38; height: 38; radius: 19
-                            color: dv.modelData.online ? Theme.accent : Qt.rgba(1, 1, 1, 0.08)
-                            Text { anchors.centerIn: parent; text: OrbitData.kindIcon(dv.modelData.kind); color: dv.modelData.online ? "white" : Theme.sub; font.family: Theme.iconFont; font.pixelSize: 18 }
-                            // звенья цепочки: устройство подключено (гаснут сами, возвращаются при наведении)
-                            LinkBadge {
-                                x: parent.width - 12; y: parent.height - 12
-                                linked: dv.modelData.online
-                                key: dv.modelData.deviceId + ":" + OrbitData.connected.length
-                                hover: dvMa.containsMouse
-                            }
-                        }
-                        Column {
-                            anchors { left: dvi.right; leftMargin: 12; right: dacts.left; rightMargin: 6; verticalCenter: head72.verticalCenter }
-                            Text { width: parent.width; elide: Text.ElideRight; text: dv.modelData.name || ""; color: Theme.text; font.family: Theme.font; font.pixelSize: 13; font.weight: Font.DemiBold }
-                            Text {
-                                width: parent.width; elide: Text.ElideRight
-                                text: [dv.modelData.model, dv.modelData.address, dv.cmds.length > 0 ? dv.cmds.length + Tr.t(" команд ›") : ""].filter(function (x) { return x; }).join(" · ")
-                                color: Theme.sub; font.family: Theme.font; font.pixelSize: 11
-                            }
-                            Text {
-                                width: parent.width; elide: Text.ElideRight
-                                text: dv.modelData.online ? Tr.t("󰌷 подключено") + (dv.modelData.battery >= 0 ? " · 󰁹 " + dv.modelData.battery + "%" + (dv.modelData.charging ? " ⚡" : "") : "") : (dv.modelData.pairing ? Tr.t("ждёт сопряжения — см. выше") : dv.modelData.connecting ? Tr.t("подключение…") : (dv.modelData.paired ? Tr.t("сопряжено · не подключено") : Tr.t("рядом · не сопряжено")))
-                                color: dv.modelData.online && dv.modelData.battery >= 0 && dv.modelData.battery < 20 && !dv.modelData.charging ? Theme.red : Theme.sub
-                                font.family: Theme.iconFont; font.pixelSize: 11
-                            }
-                        }
-                        // быстрые команды этого устройства: нажатие запускает, список ведёт само устройство
-                        Flow {
-                            id: chips
-                            visible: dv.expanded && dv.cmds.length > 0
-                            x: 12; y: 76
-                            width: parent.width - 24
-                            spacing: 6
-                            Repeater {
-                                model: dv.cmds
-                                Rectangle {
-                                    required property var modelData
-                                    width: chipText.implicitWidth + 22; height: 28; radius: 14
-                                    color: chipMa.containsMouse ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.35) : Qt.rgba(1, 1, 1, 0.09)
-                                    Text { id: chipText; anchors.centerIn: parent; text: parent.modelData.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 11 }
-                                    MouseArea { id: chipMa; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: OrbitData.runCommand(dv.modelData.deviceId, parent.modelData.id) }
-                                }
-                            }
-                        }
-
-                        Row {
-                            id: dacts
-                            anchors { right: parent.right; rightMargin: 10; verticalCenter: head72.verticalCenter }
-                            spacing: 4
-                            Repeater {
-                                model: dv.modelData.online ? [{ i: "󰍉", a: "ring" }, { i: "󰆏", a: "clip" }, { i: "󰈔", a: "file" }, { i: "󰹑", a: "view" }].concat((dv.modelData.remoteCapabilities || []).indexOf("secondScreen") >= 0 ? [{ i: "󰍺", a: "second" }] : []) : (dv.modelData.connecting || dv.modelData.pairing ? [] : [{ i: "󰌘", a: "connect" }])
-                                Rectangle {
-                                    required property var modelData
-                                    width: 32; height: 32; radius: 16
-                                    color: abMa.containsMouse ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(1, 1, 1, 0.07)
-                                    Text { anchors.centerIn: parent; text: parent.modelData.i; color: Theme.text; font.family: Theme.iconFont; font.pixelSize: 15 }
-                                    MouseArea {
-                                        id: abMa
-                                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            var id = dv.modelData.deviceId;
-                                            if (parent.modelData.a === "ring") OrbitData.ring(id);
-                                            else if (parent.modelData.a === "clip") OrbitData.sendClipboard(id);
-                                            else if (parent.modelData.a === "file") OrbitData.sendFile(id);
-                                            else if (parent.modelData.a === "view") { OrbitData.panelOpen = false; OrbitData.viewScreen(id); }
-                                            else if (parent.modelData.a === "second") { OrbitData.panelOpen = false; OrbitData.secondScreen(id); }
-                                            else OrbitData.connectTo(id);
-                                        }
-                                    }
-                                }
-                            }
+                        visible: grp.modelData.list.length > 0
+                        width: body.width
+                        spacing: 8
+                        Text { text: grp.modelData.t + " · " + grp.modelData.list.length; color: Theme.sub; font.family: Theme.font; font.pixelSize: 11; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.6; leftPadding: 4 }
+                        Repeater {
+                            model: grp.modelData.list
+                            DeviceCard { width: grp.width }
                         }
                     }
                 }
@@ -291,25 +220,25 @@ PanelWindow {
                         color: Theme.text; selectByMouse: true; clip: true
                         font.family: Theme.font; font.pixelSize: 13
                         onAccepted: addrBtn.go()
-                        Text { visible: addr.text === "" && !addr.activeFocus; anchors.verticalCenter: parent.verticalCenter; text: Tr.t("IP-адрес устройства"); color: Theme.sub; font: addr.font }
+                        Text { visible: addr.text === "" && !addr.activeFocus; anchors.verticalCenter: parent.verticalCenter; text: Tr.t("Подключить по IP, например 192.168.1.5"); color: Theme.sub; font: addr.font }
                     }
                 }
                 GButton {
                     id: addrBtn
-                    ui: Theme; height: 36; implicitWidth: 96; label: Tr.t("Связать"); icon: "󰌘"; on: addr.text.trim() !== ""
+                    ui: Theme; height: 36; implicitWidth: 112; label: Tr.t("Подключить"); icon: "󰌘"; on: addr.text.trim() !== ""
                     function go() { if (addr.text.trim() !== "") { OrbitData.connectAddress(addr.text.trim(), 17894); addr.text = ""; } }
                     onClicked: go()
                 }
             }
-            // три кнопки на всю ширину: Orbit — главная, поиск — переключатель с состоянием, обновить — квадратная
+            // три подписанные кнопки поровну: поиск — переключатель (подсвечен, пока включён), обновить список, окно Orbit
             Row {
                 id: acts
                 width: parent.width
                 spacing: 8
-                readonly property real half: (width - refreshBtn.width - spacing * 2) / 2
-                GButton { ui: Theme; height: 36; width: acts.half; label: Tr.t("Открыть Orbit"); icon: "󰏌"; on: true; onClicked: { OrbitData.show(); OrbitData.panelOpen = false; } }
-                GButton { ui: Theme; height: 36; width: acts.half; label: OrbitData.discovery ? Tr.t("Поиск: вкл") : Tr.t("Поиск: выкл"); icon: OrbitData.discovery ? "󰍉" : "󰍊"; onClicked: OrbitData.setDiscovery(!OrbitData.discovery) }
-                GButton { id: refreshBtn; ui: Theme; height: 36; width: 44; implicitWidth: 44; label: ""; icon: "󰑐"; onClicked: OrbitData.scan() }
+                readonly property real third: (width - spacing * 2) / 3
+                GButton { ui: Theme; height: 36; width: acts.third; implicitWidth: acts.third; label: Tr.t("Поиск"); icon: OrbitData.discovery ? "󰍉" : "󰍊"; on: OrbitData.discovery; onClicked: OrbitData.setDiscovery(!OrbitData.discovery) }
+                GButton { ui: Theme; height: 36; width: acts.third; implicitWidth: acts.third; label: Tr.t("Обновить"); icon: "󰑐"; onClicked: OrbitData.scan() }
+                GButton { ui: Theme; height: 36; width: acts.third; implicitWidth: acts.third; label: "Orbit"; icon: "󰏌"; onClicked: { OrbitData.show(); OrbitData.panelOpen = false; } }
             }
         }
     }

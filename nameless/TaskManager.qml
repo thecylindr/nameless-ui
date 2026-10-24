@@ -37,7 +37,8 @@ PanelWindow {
     property var resources: []
     property string sel: "cpu"
     readonly property var cfg: Config.store.tasks
-    readonly property int ptab: cfg.tab === 0 ? 0 : 1
+    // 0 — процессы, 1 — производительность, 2 — батарея (только у ноутбуков)
+    readonly property int ptab: cfg.tab === 0 ? 0 : (cfg.tab === 2 && Sys.hasBattery ? 2 : 1)
     readonly property int ncpu: hello ? hello.threads : 1
     readonly property var cur: {
         for (var i = 0; i < resources.length; i++) if (resources[i].id === sel) return resources[i];
@@ -313,9 +314,10 @@ PanelWindow {
             }
             GSegment {
                 ui: Theme
-                width: 400
+                width: Sys.hasBattery ? 540 : 400
                 anchors { right: tmClose.left; rightMargin: 10; verticalCenter: parent.verticalCenter }
                 options: [{ v: "1", t: Tr.t("Производительность"), icon: "󰓅" }, { v: "0", t: Tr.t("Процессы"), icon: "󰒋" }]
+                         .concat(Sys.hasBattery ? [{ v: "2", t: Tr.t("Батарея") + " " + Sys.batPct + "%", icon: Sys.batIcon }] : [])
                 value: String(w.ptab)
                 onPicked: (v) => Config.set("tasks.tab", Number(v))
             }
@@ -327,6 +329,15 @@ PanelWindow {
                 Text { anchors.centerIn: parent; text: "✕"; color: Theme.text; font.pixelSize: 13 }
                 onClicked: w.close()
             }
+        }
+
+        // ================= Батарея =================
+        Loader {
+            active: w.ptab === 2
+            visible: active
+            x: 18; y: 66
+            width: parent.width - 36; height: parent.height - 84
+            sourceComponent: BatteryPanel {}
         }
 
         // ================= Производительность =================

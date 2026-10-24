@@ -1,0 +1,5 @@
+# NVIDIA Turing и новее (RTX 20xx–50xx, GTX 16xx): открытые модули из репозитория
+nvidia-open
+nvidia-utils
+lib32-nvidia-utils
+nvidia-settings

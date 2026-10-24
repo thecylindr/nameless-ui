@@ -6,7 +6,7 @@
 //   qs -c nameless ipc call control toggle         Пункт управления
 //   qs -c nameless ipc call display toggle         мониторы: разрешение, частота, масштаб, счётчик кадров
 //   qs -c nameless ipc call desktop toggle | widgets | dock   рабочий стол: виджеты и док
-//   qs -c nameless ipc call programs toggle        мастер программ    (SUPER+I)
+//   qs -c nameless ipc call programs toggle | drivers | icons   мастер программ (SUPER+I); вкладки «Драйверы» и «Иконки»
 //   qs -c nameless ipc call widgets edit           расставить виджеты на рабочем столе
 //   qs -c nameless ipc call clipboard toggle               буфер обмена: история, поиск, закреплённое (SUPER+SHIFT+V)
 //   qs -c nameless ipc call wallpapers toggle | online    мастер обоев: мои и из интернета (SUPER+B)
@@ -136,7 +136,7 @@ ShellRoot {
     Timer { interval: 21600000; running: true; repeat: true; onTriggered: Quickshell.execDetached([Theme.script, "seasonal", "auto"]) }
 
     // сервис профилей: подключается, чтобы IPC-цели «profiles» работали сразу после запуска
-    Component.onCompleted: { Profiles.active; OrbitNotify.on; }
+    Component.onCompleted: { Profiles.active; OrbitNotify.on; Gpu.hybrid; Power.mode; }
 
     // первый запуск: приветствие через пару секунд после загрузки (флаг — файл в ~/.local/state/nameless)
     Process {
@@ -146,7 +146,84 @@ ShellRoot {
     }
     Timer { id: firstRun; interval: 2400; onTriggered: root.showHelp(0) }
 
-    // ---------- всегда загруженное ----------
+    // драйверы: через 20 с после запуска driver.sh --status; не хватает — уведомление с кнопкой «Открыть» (вкладка «Драйверы»).
+    // Повторно спрашивается, только когда меняется набор недостающего (флаг — ~/.local/state/nameless/drivers-asked)
+    Timer { interval: 20000; running: true; onTriggered: drvAsk.running = true }
+    Process {
+        id: drvAsk
+        command: ["sh", "-c", "r=$(cat \"$HOME/.config/glassrice/rice\" 2>/dev/null); d=\"$r/scripts/system/driver.sh\"; [ -x \"$d\" ] || d=\"$HOME/.local/share/nameless/scripts/system/driver.sh\"; [ -x \"$d\" ] || exit 0; " +
+                  "s=$(\"$d\" --status 2>/dev/null) || exit 0; n=$(echo \"$s\" | jq -r '.missing // 0'); [ \"$n\" -gt 0 ] || exit 0; " +
+                  "key=$(echo \"$s\" | jq -r '[.gpus[].pkgs[]? | select(.installed | not) | .name] + (if .cpu.installed then [] else [.cpu.ucode] end) | sort | join(\" \")'); " +
+                  "f=\"${XDG_STATE_HOME:-$HOME/.local/state}/nameless/drivers-asked\"; [ \"$(cat \"$f\" 2>/dev/null)\" = \"$key\" ] && exit 0; " +
+                  "mkdir -p \"$(dirname \"$f\")\"; echo \"$key\" > \"$f\"; [ -n \"$r\" ] && echo programs || echo \"$d\"; echo \"$key\""]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var l = text.trim().split("\n");
+                if (l.length < 2) return;
+                drvNote.target = l[0];
+                drvNote.command = drvNote.base.concat([Tr.t("Не хватает: ") + l[1]]);
+                drvNote.running = true;
+            }
+        }
+    }
+    Process {
+        id: drvNote
+        readonly property var base: ["notify-send", "-a", "NameLess", "-i", "preferences-desktop-display", "-A", "open=" + Tr.t("Открыть"), "-A", "later=" + Tr.t("Позже"), "--wait", Tr.t("Драйверы видеокарты и процессора")]
+        property string target: ""          // programs — окно «Программы» (есть сборка glassrice), иначе путь driver.sh — в терминале
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (text.trim() !== "open") return;
+                if (drvNote.target === "programs") root.openPrograms(8);
+                else Quickshell.execDetached(["kitty", "--title", Tr.t("Драйверы"), "sh", "-c", "\"$0\"; echo; read -rp 'Enter — закрыть ' _", drvNote.target]);
+            }
+        }
+    }
+
+    // окна NameLess — в меню приложений (rofi, лаунчер): ярлыки .desktop в ~/.local/share/applications, открывают окно через IPC.
+    // Пишутся при запуске (только изменившиеся), выключенная настройка apps.entries — убираются
+    readonly property var entries: [
+        ["nameless-tasks", "Диспетчер задач", "Task Manager", "Процессы, производительность, автозапуск", "utilities-system-monitor", "tasks toggle", "System;Monitor;", "процессы;диспетчер;задачи;task;monitor;"],
+        ["glassrice-programs", "Программы", "Programs", "Установка, обновления, драйверы, иконки", "system-software-install", "programs toggle", "System;PackageManager;", "пакеты;установка;pacman;aur;программы;packages;"],
+        ["nameless-drivers", "Драйверы", "Drivers", "Драйверы видеокарты и процессора", "preferences-system", "programs drivers", "System;Settings;", "драйвер;nvidia;amd;intel;видеокарта;driver;gpu;"],
+        ["nameless-icons", "Иконки", "Icons", "Темы иконок и свои значки приложений", "preferences-desktop-icons", "programs icons", "Settings;DesktopSettings;", "иконки;значки;тема;icons;theme;"],
+        ["nameless-wallpapers", "Обои", "Wallpapers", "Мои обои и обои из интернета", "preferences-desktop-wallpaper", "wallpapers toggle", "Settings;DesktopSettings;", "обои;фон;wallpaper;"],
+        ["nameless-clipboard", "Буфер обмена", "Clipboard", "История копирования и закреплённое", "edit-paste", "clipboard toggle", "Utility;", "буфер;копировать;clipboard;"],
+        ["nameless-display", "Мониторы", "Displays", "Разрешение, частота, масштаб", "preferences-desktop-display", "display toggle", "Settings;HardwareSettings;", "монитор;экран;разрешение;частота;display;"],
+        ["nameless-audio", "Звук", "Sound", "Выход, вход, приложения, проверка", "audio-volume-high", "audio toggle", "Settings;AudioVideo;", "звук;громкость;микрофон;audio;sound;"],
+        ["nameless-recorder", "Запись экрана", "Screen Recorder", "Экран и область со звуком", "media-record", "recorder toggle", "AudioVideo;Recorder;", "запись;видео;record;"],
+        ["nameless-control", "Пункт управления", "Control Center", "Сеть, Bluetooth, яркость, плитки", "preferences-system", "control toggle", "Settings;", "настройки;wifi;bluetooth;control;"],
+        ["nameless-desktop", "Рабочий стол", "Desktop", "Виджеты, док, космос, блокировка", "preferences-desktop", "desktop toggle", "Settings;DesktopSettings;", "виджеты;док;рабочий стол;widgets;dock;"],
+        ["nameless-features", "Функции и производительность", "Features", "Режим производительности, графика, функции", "preferences-system-performance", "features toggle", "Settings;System;", "производительность;графика;батарея;performance;gpu;"],
+        ["nameless-agents", "Помощники", "Assistants", "Claude Code и Codex: работа, лимиты", "utilities-terminal", "agents toggle", "Development;", "claude;codex;лимиты;assistant;"],
+        ["nameless-profiles", "Профили", "Profiles", "Набор настроек одним нажатием", "preferences-desktop-theme", "profilesui toggle", "Settings;", "профиль;режим;profile;"],
+        ["nameless-orbit-ribbon", "Устройства", "Devices", "Телефон и компьютеры через Orbit", "phone", "orbit open", "Network;", "orbit;телефон;устройства;devices;phone;"],
+        ["nameless-keys", "Клавиши и справка", "Shortcuts & Help", "Сочетания клавиш и где что", "help-browser", "keys toggle", "Utility;", "клавиши;справка;help;keys;"]
+    ]
+    readonly property bool entriesOn: Config.store.apps === undefined || Config.store.apps.entries !== false
+    // скрытые в меню приложений: ярлыки этих окон убираются (Функции → «Окна NameLess в меню приложений»)
+    readonly property var entriesHidden: (Config.store.apps || {}).hidden || []
+    readonly property string entriesKey: entriesOn + "|" + entriesHidden.join(",")
+    onEntriesKeyChanged: if (Config.ready) { entriesProc.running = false; entriesProc.running = true; }
+    Process {
+        id: entriesProc
+        running: Config.ready
+        command: {
+            var on = root.entriesOn, args = [], hidden = root.entriesHidden;
+            root.entries.forEach(function (e) {
+                args.push(e[0] + ".desktop");
+                args.push(on && hidden.indexOf(e[0]) < 0 ? ["[Desktop Entry]", "Type=Application", "Name=" + e[1], "Name[en]=" + e[2], "Comment=" + e[3], "Icon=" + e[4],
+                                "Exec=qs -c nameless ipc call " + e[5], "Categories=" + e[6], "Keywords=" + e[7], "StartupNotify=false", ""].join("\n") : "");
+            });
+            // шторка «Оформление» — отдельный конфиг Quickshell
+            args.push("nameless-themedrawer.desktop");
+            args.push(on && hidden.indexOf("nameless-themedrawer") < 0 ? ["[Desktop Entry]", "Type=Application", "Name=Оформление", "Name[en]=Appearance", "Comment=Темы, цвета, курсор, обои", "Icon=preferences-desktop-theme",
+                            "Exec=qs -c ThemeDrawer ipc call drawer toggle", "Categories=Settings;DesktopSettings;", "Keywords=тема;оформление;цвет;theme;appearance;", "StartupNotify=false", ""].join("\n") : "");
+            return ["sh", "-c", "d=\"${XDG_DATA_HOME:-$HOME/.local/share}/applications\"; mkdir -p \"$d\"; while [ $# -gt 1 ]; do f=\"$d/$1\"; " +
+                    "if [ -z \"$2\" ]; then rm -f \"$f\"; elif [ \"$(cat \"$f\" 2>/dev/null)\" != \"$(printf '%s' \"$2\")\" ]; then printf '%s' \"$2\" > \"$f\"; fi; shift 2; done", "sh"].concat(args);
+        }
+    }
+
+    // ---------- всегда загруженное ----------    // ---------- всегда загруженное ----------
     Sky {}
     Bar { shell: root }
     NotifPopups {}
@@ -187,6 +264,7 @@ ShellRoot {
         function toggle(): void { root.toggleTasks(); }
         function perf(): void { root.openTasks(1); }
         function procs(): void { root.openTasks(0); }
+        function battery(): void { root.openTasks(2); }
     }
     IpcHandler {
         target: "orbit"
@@ -241,6 +319,8 @@ ShellRoot {
     IpcHandler {
         target: "programs"
         function toggle(): void { var p = programsL.item; if (p && p.open) p.open = false; else root.openPrograms(); }
+        function drivers(): void { root.openPrograms(8); }
+        function icons(): void { root.openPrograms(7); }
     }
     IpcHandler {
         target: "display"

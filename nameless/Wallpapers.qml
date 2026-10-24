@@ -183,6 +183,30 @@ PanelWindow {
     readonly property var topics: [[Tr.t("Природа"), "nature"], [Tr.t("Космос"), "space"], [Tr.t("Горы"), "mountains"], [Tr.t("Город"), "city night"], [Tr.t("Океан"), "ocean"], [Tr.t("Минимализм"), "minimal"],
                                    [Tr.t("Абстракция"), "abstract"], [Tr.t("Аниме"), "anime"], [Tr.t("Машины"), "cars"], [Tr.t("Лес"), "forest"]]
     readonly property var holidays: [[Tr.t("󰉒 Новый год"), "new year winter"], [Tr.t("󰋑 14 февраля"), "valentine hearts"], [Tr.t("󰮯 Хэллоуин"), "halloween"]]
+    // подборки: источник + тема одним нажатием (лучшее под каждую тему)
+    readonly property var collections: [
+        { t: Tr.t("󰽥 Глубокий космос"), src: "nasa", q: "nebula galaxy" }, { t: Tr.t("󰖨 Закаты"), src: "wallhaven", q: "sunset landscape" },
+        { t: Tr.t("󰔱 Горы и туман"), src: "wallhaven", q: "misty mountains" }, { t: Tr.t("󰖐 Дождь в городе"), src: "wallhaven", q: "rain city night" },
+        { t: Tr.t("󰟿 Пиксель-арт"), src: "wallhaven", q: "pixel art" }, { t: Tr.t("󰉏 Картины мастеров"), src: "artic", q: "landscape" },
+        { t: Tr.t("󰌪 Природа (CC)"), src: "commons", q: "forest" }, { t: Tr.t("󰎆 Лоу-фай аниме"), src: "wallhaven_anime", q: "lofi" },
+        { t: Tr.t("󰘚 Киберпанк"), src: "wallhaven", q: "cyberpunk city" }, { t: Tr.t("󰋙 Минимализм"), src: "wallhaven", q: "minimalist dark" },
+        { t: Tr.t("󰼄 Японская осень"), src: "wallhaven", q: "japan autumn" }, { t: Tr.t("󰼬 Северное сияние"), src: "commons", q: "aurora borealis" }]
+    function openCollection(c) { query = c.q; searchField.text = c.q; if (src !== c.src) src = c.src; else search(true); }
+    // вся страница в папку: по одной, с записью авторов в CREDITS.tsv
+    property int packLeft: 0
+    Process {
+        id: packProc
+        stdout: SplitParser { onRead: line => { if (line.indexOf("/") >= 0) w.packLeft = Math.max(0, w.packLeft - 1); } }
+        onExited: { w.say(Tr.t("Подборка скачана в ") + w.destDir); w.packLeft = 0; dirsProc.running = true; }
+    }
+    function downloadPage() {
+        if (packProc.running || results.length === 0) return;
+        var args = [];
+        results.slice(0, 12).forEach(function (r) { args.push(r.full, src + "-" + r.id, r.title || "", r.author || "", r.license || "", r.page || ""); });
+        packLeft = Math.min(12, results.length);
+        packProc.command = ["bash", "-c", "n=\"$1\"; d=\"$2\"; shift 2; while [ $# -ge 6 ]; do bash \"$n\" get \"$1\" \"$d\" \"$2\" \"$3\" \"$4\" \"$5\" \"$6\" || echo fail; shift 6; done", "sh", net, destDir].concat(args);
+        packProc.running = true;
+    }
 
     Process {
         id: searchProc
@@ -491,6 +515,12 @@ PanelWindow {
                         Text { visible: searchField.text === ""; anchors.verticalCenter: parent.verticalCenter; text: w.src === "commons" ? Tr.t("Поиск по-английски, Enter (пусто — избранные фото)") : Tr.t("Поиск по-английски, Enter"); color: Theme.sub; font: searchField.font }
                     }
                 }
+                // подборки: источник и тема сразу
+                Flow {
+                    width: parent.width; spacing: 6
+                    Text { text: Tr.t("Подборки:"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11; topPadding: 6 }
+                    Repeater { model: w.collections; Chip { required property var modelData; text: modelData.t; on: w.src === modelData.src && w.query === modelData.q; accent: true; onClicked: w.openCollection(modelData) } }
+                }
                 // тематические запросы
                 Flow {
                     width: parent.width; spacing: 6
@@ -572,6 +602,14 @@ PanelWindow {
                 canNext: w.results.length > 0 && !w.loading
                 info: w.loading ? Tr.t("загрузка…") : (w.results.length + Tr.t(" на странице"))
                 onGo: (p) => w.goPage(p)
+            }
+            // скачать всю страницу в выбранную папку
+            Chip {
+                anchors { right: parent.right; verticalCenter: netPager.verticalCenter }
+                visible: w.results.length > 0
+                text: w.packLeft > 0 ? Tr.t("󰇚 Скачиваю… осталось ") + w.packLeft : Tr.t("󰇚 Скачать всю страницу (") + Math.min(12, w.results.length) + ")"
+                accent: true
+                onClicked: w.downloadPage()
             }
 
             // выбранная картинка: кто автор, лицензия, откуда; куда сохранить и что сделать

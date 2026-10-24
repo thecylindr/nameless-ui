@@ -8,7 +8,9 @@ ShaderEffect {
     property real pressedAmount: 0
     property real strength: 1.0
 
-    visible: width > 2 && height > 2 && (!ui || ui.glass !== false)
+    // экономный режим (и «авто» от батареи): объёмный кант не рисуется — шейдер на каждой плитке и панели заметно грузит
+    // встроенную видеокарту; стекло остаётся стеклом (размытие, дымка, верхний свет)
+    visible: width > 2 && height > 2 && (!ui || ui.glass !== false) && !Perf.eco
     vertexShader: Qt.resolvedUrl("shaders/liquidrim.vert.qsb")
     fragmentShader: Qt.resolvedUrl("shaders/liquidrim.frag.qsb")
     property size size: Qt.size(width, height)

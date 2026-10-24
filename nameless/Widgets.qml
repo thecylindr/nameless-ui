@@ -14,7 +14,7 @@ PanelWindow {
     readonly property bool edit: shell ? shell.widgetsEdit : false
     function done() { if (shell) shell.widgetsEdit = false; }
 
-    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    screen: Compositor.mainScreen
     // солнечная система космических тем живёт в этом же слое: здесь окно принимает мышь
     readonly property bool space: Theme.cosmos === "solar" || Theme.cosmos === "apps"
     visible: cardsOn || space
@@ -102,18 +102,23 @@ PanelWindow {
             return;
         }
         var s = slotOf(sel); if (!s) return;
-        Config.placeWidget(sel, Math.max(8, Math.min(w.width - s.width - 8, s.x + dx)), Math.max(8, Math.min(w.height - s.height - 8, s.y + dy)));
+        var nx = Math.max(8, Math.min(w.width - s.width - 8, s.x + dx)), ny = Math.max(top0, Math.min(w.height - s.height - 8, s.y + dy));
+        Config.placeWidget(sel, nx, ny, nx / w.width, ny / w.height);
     }
 
     readonly property var files: ({ clock: "WClock.qml", system: "WSystem.qml", player: "WPlayer.qml", calendar: "WCalendar.qml",
                                     notifs: "WNotifs.qml", weather: "WWeather.qml", notes: "WNotes.qml", timer: "WTimer.qml",
-                                    actions: "WActions.qml", photo: "WPhoto.qml", updates: "WUpdates.qml", countdown: "WCountdown.qml", agents: "WAgents.qml", claude: "WClaude.qml", tokens: "WTokens.qml", orbit: "WOrbit.qml", touch: "WTouch.qml" })
+                                    actions: "WActions.qml", photo: "WPhoto.qml", updates: "WUpdates.qml", countdown: "WCountdown.qml", agents: "WAgents.qml", claude: "WClaude.qml", tokens: "WTokens.qml", orbit: "WOrbit.qml", touch: "WTouch.qml",
+                                    pets: "WPets.qml", clawd: "WClawd.qml", gif: "WGif.qml",
+                                    fish: "WFish.qml", moon: "WMoon.qml", quote: "WQuote.qml" })
     readonly property var items: Config.widgets.items
     readonly property bool right: Config.widgets.side === "right"
     readonly property int top0: 56            // под баром
     // ---------- сетка ----------
-    // режимы расстановки: grid — сетка по двум осям (узлы с шагом pitch), columns — колонки списком, free — свободно
-    readonly property string layoutMode: Config.widgets.layout || "grid"
+    // режимы расстановки: auto — по рядам на всю ширину экрана, grid — сетка по двум осям (узлы с шагом pitch),
+    // columns — колонки списком, free — свободно
+    readonly property string layoutMode: Config.widgets.layout || "auto"
+    readonly property bool autoMode: layoutMode === "auto"
     readonly property bool gridMode: layoutMode === "columns"
     readonly property bool grid2: layoutMode === "grid"
     readonly property int pitch: 84
@@ -135,9 +140,9 @@ PanelWindow {
         }
         return Qt.point(x, y);
     }
-    readonly property int cellW: 300
-    readonly property int gap: 16
-    readonly property int cols: Math.max(1, Math.floor((width - 32 + gap) / (cellW + gap)))
+    readonly property real cellW: fixedGrid ? (width - 32 - (fixedCols - 1) * gap) / fixedCols : 300 * ws
+    readonly property real gap: 16 * ws
+    readonly property int cols: fixedGrid ? fixedCols : Math.max(1, Math.floor((width - 32 + gap) / (cellW + gap)))
     // колонка по номеру: от левого края или, если колонки справа, от правого
     function colX(c) { return right ? width - 16 - (c + 1) * cellW - c * gap : 16 + c * (cellW + gap); }
     function spanOf(it) { return it.size === "L" ? 2 : 1; }
@@ -187,6 +192,123 @@ PanelWindow {
         return out;
     }
 
+    // ---------- свободно: места по долям экрана, без наложений ----------
+    readonly property bool freeMode: layoutMode === "free"
+    // прямоугольник занят кем-то из списка (с зазором 6)
+    function overlaps(x, y, wd, ht, rects) {
+        for (var k = 0; k < rects.length; k++) {
+            var t = rects[k];
+            if (x < t.x + t.w + 6 && x + wd > t.x - 6 && y < t.y + t.h + 6 && y + ht > t.y - 6) return true;
+        }
+        return false;
+    }
+    // ближайшее к (x, y) свободное место: кольцами с шагом 12 во все стороны, в пределах экрана и под баром
+    function nearestFree(x, y, wd, ht, rects) {
+        var minX = 8, maxX = Math.max(8, width - wd - 8), minY = top0, maxY = Math.max(top0, height - ht - 8);
+        x = Math.max(minX, Math.min(maxX, x)); y = Math.max(minY, Math.min(maxY, y));
+        if (!overlaps(x, y, wd, ht, rects)) return Qt.point(x, y);
+        for (var r = 1; r < 90; r++) {
+            var best = null, bd = 1e12;
+            for (var i = -r; i <= r; i++) for (var j = -r; j <= r; j++) {
+                if (Math.abs(i) !== r && Math.abs(j) !== r) continue;          // только кольцо
+                var cx = x + i * 12, cy = y + j * 12;
+                if (cx < minX || cx > maxX || cy < minY || cy > maxY || overlaps(cx, cy, wd, ht, rects)) continue;
+                var d = i * i + j * j;
+                if (d < bd) { bd = d; best = Qt.point(cx, cy); }
+            }
+            if (best) return best;
+        }
+        return Qt.point(x, y);
+    }
+    // места всех: сначала поставленные (по долям экрана; старые настройки — по пикселям), затем остальные — в первое свободное
+    // место колонкой от своего края
+    readonly property var freeMap: {
+        if (!freeMode || width <= 0) return {};
+        var out = {}, taken = [], rest = [], i, it, sl;
+        for (i = 0; i < items.length; i++) {
+            it = items[i]; sl = rep.count > i ? rep.itemAt(i) : null;
+            if (!sl || !sl.shown) continue;
+            if (it.x === undefined && it.rx === undefined) { rest.push(i); continue; }
+            var px = it.rx !== undefined ? it.rx * width : it.x, py = it.ry !== undefined ? it.ry * height : it.y;
+            var p = nearestFree(px, py, sl.width, sl.height, taken);
+            out[it.type] = p; taken.push({ x: p.x, y: p.y, w: sl.width, h: sl.height });
+        }
+        for (var k = 0; k < rest.length; k++) {
+            it = items[rest[k]]; sl = rep.itemAt(rest[k]);
+            var q = nearestFree(right ? width - sl.width - 16 : 16, top0, sl.width, sl.height, taken);
+            out[it.type] = q; taken.push({ x: q.x, y: q.y, w: sl.width, h: sl.height });
+        }
+        return out;
+    }
+    // занятое другими (для отпускания перетаскиваемого)
+    function othersRects(slot) {
+        var out = [];
+        slots().forEach(function (o) { if (o !== slot) out.push({ x: o.baseX, y: o.baseY, w: o.width, h: o.height }); });
+        return out;
+    }
+    property var ghost: null                // куда встанет перетаскиваемый (свободно): рамка-подсказка
+
+    // ---------- по рядам: раскладка под любой экран ----------
+    // колонок столько, сколько помещается по ширине (не больше, чем виджетов), ширина колонки растягивается поровну (до 400),
+    // весь блок по центру; виджет встаёт в самую короткую колонку — ряды выходят ровными, без пустой полосы с одного края
+    // масштаб виджетов: «авто» — по логическому размеру экрана (масштаб монитора уже учтён), за основу — Full HD; или число из настроек
+    readonly property var scaleOpt: Config.widgets.scale
+    // заданное число колонок или рядов (0 — авто): колонок = заданное или «виджетов ÷ рядов»;
+    // ширина колонки — поровну на всю ширину экрана, масштаб виджетов подбирается под неё (колонка = 300 точек виджета)
+    readonly property int wantCols: Math.max(0, Math.min(10, Config.widgets.cols || 0))
+    readonly property int wantRows: Math.max(0, Math.min(6, Config.widgets.rows || 0))
+    readonly property bool fixedGrid: (autoMode || gridMode) && (wantCols > 0 || wantRows > 0)
+    // считаются только видимые: пустой виджет (плеер без музыки) колонку не занимает
+    readonly property int shownCount: { var n = 0; for (var i = 0; i < rep.count; i++) { var s = rep.itemAt(i); if (s && s.shown) n++; } return Math.max(1, n); }
+    readonly property int fixedCols: wantCols > 0 ? wantCols : Math.max(1, Math.ceil(shownCount / Math.max(1, wantRows)))
+    readonly property real fixedColW: Math.max(160, (width - 32 - (fixedCols - 1) * 16) / fixedCols)
+    readonly property real ws: fixedGrid && width > 0 ? Math.max(0.6, Math.min(2.2, fixedColW / 300))
+                               : ((scaleOpt === undefined || scaleOpt === "auto") && width > 0 && height > 0
+                                  ? Math.max(0.85, Math.min(1.5, Math.min(width / 1920, height / 1080)))
+                                  : Math.max(0.6, Math.min(2, Number(scaleOpt) || 1)))
+    // выравнивание рядов: left — прижаты влево, center — по центру, right — вправо, fill — колонки на всю ширину экрана
+    readonly property string align: Config.widgets.align || "center"
+    readonly property real autoMin: 280 * ws
+    // «на всю ширину»: колонок — сколько помещается, независимо от числа виджетов; иначе — не больше, чем виджетов
+    readonly property int fitCols: Math.max(1, Math.floor((width - 32 + gap) / (autoMin + gap)))
+    readonly property int autoCols: fixedGrid ? fixedCols : (align === "fill" ? fitCols : Math.max(1, Math.min(shownCount, fitCols)))
+    // ширина колонки не меньше autoMin: пока окно слоя ещё без размера (ширина 0), формула давала отрицательную ширину,
+    // часы считали по ней свою высоту и застревали полоской; кроме «на всю ширину» — не шире 400 (с масштабом)
+    readonly property real autoW: fixedGrid ? (width - 32 - (autoCols - 1) * gap) / autoCols
+                                  : Math.max(autoMin, Math.min(align === "fill" ? 1e6 : 400 * ws, (width - 32 - (autoCols - 1) * gap) / autoCols))
+    readonly property real autoTotal: autoCols * autoW + (autoCols - 1) * gap
+    readonly property real autoX0: fixedGrid || align === "left" || align === "fill" ? 16 : (align === "right" ? width - 16 - autoTotal : (width - autoTotal) / 2)
+    readonly property var autoMap: {
+        if (!autoMode) return {};
+        var h = [], out = {}, c, i;
+        for (c = 0; c < autoCols; c++) h.push(top0);
+        for (i = 0; i < items.length; i++) {
+            var it = items[i], s = rep.count > i ? rep.itemAt(i) : null;
+            if (!s || !s.shown) continue;
+            var sp = Math.min(autoCols, spanOf(it)), best = 0, by = 1e9;
+            // самая низкая «крыша» среди подходящих мест (для широкого — по двум колонкам)
+            for (c = 0; c + sp <= autoCols; c++) {
+                var y = h[c];
+                for (var k = 1; k < sp; k++) y = Math.max(y, h[c + k]);
+                if (y < by - 0.5) { by = y; best = c; }
+            }
+            out[it.type] = { x: autoX0 + best * (autoW + gap), y: by };
+            for (k = 0; k < sp; k++) h[best + k] = by + s.height + gap;
+        }
+        return out;
+    }
+    // перетаскивание по рядам: встать перед виджетом, ближайшим к точке отпускания
+    function autoDrop(type, cx, cy) {
+        var best = "", bd = 1e12;
+        for (var t in autoMap) {
+            if (t === type) continue;
+            var s = slotOf(t); if (!s) continue;
+            var d = Math.pow(autoMap[t].x + s.width / 2 - cx, 2) + Math.pow(autoMap[t].y + s.height / 2 - cy, 2);
+            if (d < bd) { bd = d; best = t; }
+        }
+        return best;
+    }
+
     // куда встанет перетаскиваемый в сетке: колонка под курсором и виджет, перед которым
     property var dropAt: null
     readonly property int grid: 8
@@ -196,7 +318,7 @@ PanelWindow {
     // сетка привязки
     Canvas {
         anchors.fill: parent
-        visible: w.edit && !w.gridMode
+        visible: w.edit && !w.gridMode && !w.autoMode
         onVisibleChanged: if (visible) requestPaint()
         readonly property bool g2: w.grid2
         onG2Changed: requestPaint()
@@ -253,23 +375,31 @@ PanelWindow {
             readonly property var cell: w.gridMode ? (w.gridMap[it.type] || null) : null
             // ширина — только из размера: от раскладки её брать нельзя (раскладка зависит от высоты, а та — от ширины)
             readonly property int span: Math.min(w.cols, w.spanOf(it))
-            width: w.gridMode ? span * w.cellW + (span - 1) * w.gap : (Config.sizes[it.size || "M"] || 300)
-            height: loader.item ? loader.item.implicitHeight : 0
+            readonly property int aspan: Math.min(w.autoCols, w.spanOf(it))
+            width: w.autoMode ? aspan * w.autoW + (aspan - 1) * w.gap : (w.gridMode ? span * w.cellW + (span - 1) * w.gap : (Config.sizes[it.size || "M"] || 300) * w.ws)
+            // высота — из виджета, но отложенно (Qt.callLater): ширина в раскладке «по рядам» зависит от числа видимых виджетов,
+            // а та — от загрузки соседей; прямая привязка ловила цикл, и Qt оставлял высоту от прежней ширины (часы вылезали за карточку)
+            height: 0
+            function syncHeight() { height = loader.item ? Math.max(0, loader.item.implicitHeight) * w.ws : 0; }
+            Connections { target: loader.item; ignoreUnknownSignals: true; function onImplicitHeightChanged() { Qt.callLater(slot.syncHeight); } }
             // место по настройкам; во время перетаскивания — плюс смещение жеста
             readonly property real freeX: placed ? Math.min(it.x, w.width - width - 8) : (w.right ? w.width - width - 16 : 16)
             readonly property real freeY: placed ? Math.min(it.y, w.height - height - 8) : w.autoY(index)
             readonly property var g2: w.grid2 ? (w.grid2Map[it.type] || null) : null
-            readonly property real baseX: cell ? cell.x : (g2 ? g2.x : freeX)
-            readonly property real baseY: cell ? cell.y : (g2 ? g2.y : freeY)
+            readonly property var am: w.autoMode ? (w.autoMap[it.type] || null) : null
+            readonly property var fm: w.freeMode ? (w.freeMap[it.type] || null) : null
+            readonly property real baseX: am ? am.x : (cell ? cell.x : (g2 ? g2.x : (fm ? fm.x : freeX)))
+            readonly property real baseY: am ? am.y : (cell ? cell.y : (g2 ? g2.y : (fm ? fm.y : freeY)))
             // во время перетаскивания — с привязкой к соседям и краям экрана
             // свободно — с привязкой к соседям и краям; в сетке виджет просто следует за курсором
             readonly property var snapped: !drag.active ? null
-                : (w.gridMode ? { x: baseX + drag.activeTranslation.x, y: baseY + drag.activeTranslation.y, gx: -1, gy: -1 }
+                : (w.gridMode || w.autoMode ? { x: baseX + drag.activeTranslation.x, y: baseY + drag.activeTranslation.y, gx: -1, gy: -1 }
                 : (w.grid2 ? { x: w.snapCell(baseX + drag.activeTranslation.x, 16, w.width - width - 8), y: w.snapCell(baseY + drag.activeTranslation.y, w.top0, w.height - height - 8), gx: -1, gy: -1 }
                 : w.snapTo(slot, baseX + drag.activeTranslation.x, baseY + drag.activeTranslation.y)))
             onSnappedChanged: if (snapped) {
                 w.guideX = snapped.gx; w.guideY = snapped.gy;
                 if (w.gridMode) w.dropAt = w.gridDrop(slot, snapped.x + width / 2, snapped.y);
+                if (w.freeMode) { var gp = w.nearestFree(snapped.x, snapped.y, width, height, w.othersRects(slot)); w.ghost = { x: gp.x, y: gp.y, w: width, h: height }; }
             }
             x: snapped ? snapped.x : baseX
             y: snapped ? snapped.y : baseY
@@ -277,12 +407,20 @@ PanelWindow {
             Behavior on x { enabled: !drag.active; NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
             Behavior on y { enabled: !drag.active; NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
 
+            // виджет рисуется в своём размере и увеличивается целиком (масштаб ws): шрифты, отступы и рамки — в одной пропорции
+            onWidthChanged: Qt.callLater(slot.syncHeight)
+            Connections { target: w; function onWsChanged() { Qt.callLater(slot.syncHeight); } }
             Loader {
                 id: loader
-                anchors.fill: parent
+                width: slot.width / w.ws
+                height: slot.height / w.ws
+                scale: w.ws
+                transformOrigin: Item.TopLeft
                 active: slot.it.on === true && w.cardsOn
                 source: w.files[slot.it.type] || ""
                 asynchronous: true
+                onLoaded: slot.syncHeight()
+                onItemChanged: Qt.callLater(slot.syncHeight)
                 // при правке кнопки виджета не перехватывают перетаскивание
                 enabled: !w.edit
             }
@@ -323,6 +461,12 @@ PanelWindow {
                 onActiveChanged: {
                     if (active) { w.sel = slot.it.type; return; }
                     w.guideX = -1; w.guideY = -1;
+                    // по рядам: меняется только порядок — встать перед ближайшим к точке отпускания
+                    if (w.autoMode) {
+                        var before = w.autoDrop(slot.it.type, slot.baseX + lx + slot.width / 2, slot.baseY + ly + slot.height / 2);
+                        if (before !== "") Config.gridMove(slot.it.type, slot.it.col || 0, before);
+                        return;
+                    }
                     if (w.gridMode) {
                         // сетка: в колонку под курсором, перед виджетом ниже точки отпускания
                         var t = w.gridDrop(slot, slot.baseX + lx + slot.width / 2, slot.baseY + ly);
@@ -337,8 +481,10 @@ PanelWindow {
                         return;
                     }
                     // свободно: привязка, затем свободное место без наложения
-                    var r = w.snapTo(slot, slot.baseX + lx, slot.baseY + ly), f = w.freeSpot(slot, r.x, r.y);
-                    Config.placeWidget(slot.it.type, f.x, f.y);
+                    // свободно: привязка, затем ближайшее свободное место (во все стороны), место — и в долях экрана
+                    var r = w.snapTo(slot, slot.baseX + lx, slot.baseY + ly), f = w.nearestFree(r.x, r.y, slot.width, slot.height, w.othersRects(slot));
+                    w.ghost = null;
+                    Config.placeWidget(slot.it.type, f.x, f.y, f.x / w.width, f.y / w.height);
                 }
             }
             // кнопки виджета — плашкой внутри правого верхнего угла, только у наведённого или выбранного:
@@ -434,6 +580,15 @@ PanelWindow {
     }
     // направляющие привязки
     Rectangle { visible: w.edit && w.guideX >= 0; x: w.guideX; width: 1; height: w.height; color: Theme.accent; opacity: 0.8; z: 4 }
+    // свободно: где встанет перетаскиваемый виджет
+    Rectangle {
+        visible: w.edit && w.freeMode && w.ghost !== null
+        x: w.ghost ? w.ghost.x : 0; y: w.ghost ? w.ghost.y : 0
+        width: w.ghost ? w.ghost.w : 0; height: w.ghost ? w.ghost.h : 0
+        radius: Theme.ios ? 26 : 20; z: 3
+        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.12)
+        border.width: 2; border.color: Theme.accent
+    }
     Rectangle { visible: w.edit && w.guideY >= 0; y: w.guideY; height: 1; width: w.width; color: Theme.accent; opacity: 0.8; z: 4 }
 
     // меню закрывается, как только работа ушла с рабочего стола: курсор на баре или в окне (слой стола

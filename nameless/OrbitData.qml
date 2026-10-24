@@ -93,7 +93,31 @@ Singleton {
     Timer { id: later; interval: 300; onTriggered: { d.refresh(); interval = 300; } }
     function scan() { call("Scan", "", ""); }
     function setDiscovery(on) { call("SetDiscovery", "b", on ? "true" : "false"); }
+    // ---------- второй экран Orbit на этом компьютере ----------
+    // сигнал VirtualScreen: open — монитор создан (чей он), closing — сейчас будет удалён: окна NameLess с него убираются заранее
+    property var virtualScreens: ({})       // { HEADLESS-ORBIT-N: { peer, kind } }
+    property var closingScreens: []
+    Process {
+        running: d.enabled
+        command: ["dbus-monitor", "--session", "type='signal',interface='" + d.svc + "',member='VirtualScreen'"]
+        stdout: SplitParser {
+            onRead: line => {
+                var i = line.indexOf("string \"");
+                if (i < 0) return;
+                try {
+                    var o = JSON.parse(line.slice(i + 8, line.lastIndexOf("\"")));
+                    var m = Object.assign({}, d.virtualScreens);
+                    if (o.state === "open") { m[o.output] = { peer: o.peer, kind: o.kind }; d.closingScreens = d.closingScreens.filter(function (n) { return n !== o.output; }); }
+                    else { delete m[o.output]; d.closingScreens = d.closingScreens.concat([o.output]); }
+                    d.virtualScreens = m;
+                } catch (e) { }
+            }
+        }
+    }
+
     function connectTo(id) { call("Connect", "s", id); }
+    function disconnectFrom(id) { call("Disconnect", "s", id); }
+    function mediaCommand(id, action) { call("MediaCommand", "ss", [id, action]); }      // плеер устройства: playpause | next | previous
     function ring(id) { call("Ring", "s", id); }
     function sendClipboard(id) { call("SendClipboard", "s", id); }
     function show() { if (running) call("Show", "", ""); else spawnOrbit(""); }

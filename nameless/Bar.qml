@@ -11,7 +11,7 @@ import Quickshell.Io
 //   справа  — трей · сеть, звук, яркость, батарея · уведомления, оформление, Пункт управления
 Variants {
     id: bars
-    model: Quickshell.screens
+    model: Compositor.screens
     property var shell: null          // shell.qml: открытие панелей
 
     PanelWindow {
@@ -222,8 +222,17 @@ Variants {
                     icon: "󰓅"
                     iconColor: value >= hz * 0.9 ? Theme.green : (value >= hz * 0.5 ? Theme.yellow : Theme.red)
                     label: value + " FPS · " + Math.round(hz) + Tr.t(" Гц")
-                    FrameAnimation { running: fps.visible; onTriggered: fps.frames++ }
-                    Timer { interval: 1000; repeat: true; running: fps.visible; onTriggered: { fps.value = fps.frames; fps.frames = 0; } }
+                    // замер — одна секунда из пяти: FrameAnimation заставляет бар перерисовываться каждый кадр монитора (165 раз в секунду),
+                    // а с ним и размытие под баром; постоянный замер сам съедал заметную часть видеокарты
+                    property bool measuring: false
+                    FrameAnimation { running: fps.visible && fps.measuring; onTriggered: fps.frames++ }
+                    Timer {
+                        interval: fps.measuring ? 1000 : 4000; repeat: true; running: fps.visible; triggeredOnStart: true
+                        onTriggered: {
+                            if (fps.measuring) { fps.value = fps.frames; fps.measuring = false; }
+                            else { fps.frames = 0; fps.measuring = true; }
+                        }
+                    }
                     Process {
                         running: fps.visible && Compositor.hyprland
                         command: ["hyprctl", "-j", "monitors"]

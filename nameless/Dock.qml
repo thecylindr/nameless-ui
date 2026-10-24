@@ -15,7 +15,7 @@ import Quickshell.Wayland
 PanelWindow {
     id: w
     property var shell: null
-    screen: Quickshell.screens.length > 0 ? Quickshell.screens[0] : null
+    screen: Compositor.mainScreen
     visible: Theme.th.dock === true
     anchors { bottom: true; left: true; right: true }
 
@@ -41,9 +41,7 @@ PanelWindow {
     function entryFor(id) { return apps.length >= 0 ? (DesktopEntries.byId(id) || DesktopEntries.heuristicLookup(id)) : null; }
     function norm(s) { return (s || "").toLowerCase().replace(/\.desktop$/, ""); }
     function iconOf(e, id) {
-        var n = e ? e.icon : norm(id);
-        if (n && n.charAt(0) === "/") return "file://" + n;
-        return Quickshell.iconPath(n || "", true) || Quickshell.iconPath("application-x-executable", true);
+        return Icons.app(e ? e.icon : norm(id));
     }
     // окна приложения: по appId окна, id ярлыка и StartupWMClass
     function windowsOf(id, e, app) {

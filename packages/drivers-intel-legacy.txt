@@ -1,0 +1,4 @@
+# Старая встроенная графика Intel (до Broadwell: Sandy/Ivy Bridge, Haswell, Bay Trail): видеоускорение i965
+libva-intel-driver
+vulkan-intel
+lib32-vulkan-intel

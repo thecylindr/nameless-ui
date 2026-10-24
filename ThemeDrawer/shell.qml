@@ -776,7 +776,7 @@ ShellRoot {
                 Text { text: Tr.t("Шаблоны"); color: look.sub; font.family: look.font; font.pixelSize: 12; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.8; leftPadding: 4 }
                 Grid {
                     id: tplGrid
-                    readonly property int cols: panel.wide ? Math.max(1, Math.min(root.view.cols || 2, 6,  Math.floor(themesLeft.width / 300))) : Math.max(1, root.view.cols || 2)
+                    readonly property int cols: panel.wide ? Math.max(1, Math.min(root.view.cols || 2, 6,  Math.floor(themesLeft.width / 340))) : Math.max(1, root.view.cols || 2)
                     columns: cols
                     spacing: 10
                     Repeater {
@@ -786,7 +786,7 @@ ShellRoot {
                             readonly property var info: root.themeInfo(modelData.id)
                             ui: look
                             width: (themesLeft.width - 10 * (tplGrid.cols - 1)) / tplGrid.cols
-                            height: 140
+                            height: 172
                             kind: modelData.kind
                             title: info ? info.name : modelData.id
                             sub: modelData.sub
@@ -879,7 +879,7 @@ ShellRoot {
                 Grid {
                     id: mine
                     width: parent.width
-                    readonly property int cols: panel.wide ? Math.max(1, Math.min(root.view.cols || 2, 6,  Math.floor(themesLeft.width / 300))) : Math.max(1, root.view.cols || 2)
+                    readonly property int cols: panel.wide ? Math.max(1, Math.min(root.view.cols || 2, 6,  Math.floor(themesLeft.width / 340))) : Math.max(1, root.view.cols || 2)
                     columns: cols
                     spacing: 8
                     readonly property real cw: (width - spacing * (cols - 1)) / cols
@@ -1243,6 +1243,11 @@ ShellRoot {
                     GButton { ui: look; label: Tr.t("Выразительно"); onClicked: root.crossPreset("vivid") }
                 }
                 GSwitch { ui: look; label: Tr.t("Меньше движения"); sub: Tr.t("короткая неподвижная подсветка края без свечения и частиц"); checked: root.cross.reducedMotion === true; onToggled: v => { root.crossSet("reducedMotion", v); root.crossTry("out"); } }
+                // вспомогательные действия при уходе курсора на другой компьютер
+                Text { text: Tr.t("Когда курсор на другом компьютере"); color: look.text; font.family: look.font; font.pixelSize: 13 }
+                GSwitch { ui: look; label: Tr.t("Отправлять буфер обмена"); sub: Tr.t("скопированное здесь сразу можно вставить там"); checked: (root.cross.actions || {}).clipboard !== false; onToggled: v => root.crossSet("actions", Object.assign({}, root.cross.actions || {}, { clipboard: v })) }
+                GSwitch { ui: look; label: Tr.t("Показывать, где курсор"); sub: Tr.t("полоска у края и плашка с именем компьютера и подсказкой Scroll Lock"); checked: (root.cross.actions || {}).badge !== false; onToggled: v => root.crossSet("actions", Object.assign({}, root.cross.actions || {}, { badge: v })) }
+                GSwitch { ui: look; label: Tr.t("Не беспокоить, пока курсор там"); sub: Tr.t("уведомления этого компьютера не всплывают, потом прежний режим"); checked: (root.cross.actions || {}).quiet === true; onToggled: v => root.crossSet("actions", Object.assign({}, root.cross.actions || {}, { quiet: v })) }
                 Text { text: Tr.t("Проверить край"); color: look.text; font.family: look.font; font.pixelSize: 13 }
                 Flow {
                     width: parent.width; spacing: 8

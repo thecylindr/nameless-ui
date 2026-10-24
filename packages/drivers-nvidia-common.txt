@@ -1,0 +1,4 @@
+# Общее для NVIDIA: Wayland (EGL), видеоускорение VA-API, гибридная графика ноутбуков
+egl-wayland
+libva-nvidia-driver
+nvidia-prime

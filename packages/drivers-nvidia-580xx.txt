@@ -1,0 +1,5 @@
+# NVIDIA Maxwell / Pascal / Volta (GTX 9xx, GTX 10xx, Titan V): ветка 580 из AUR, основной драйвер их больше не поддерживает
+nvidia-580xx-dkms
+nvidia-580xx-utils
+lib32-nvidia-580xx-utils
+nvidia-580xx-settings

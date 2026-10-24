@@ -64,7 +64,7 @@ PanelWindow {
         return out.slice(0, grid ? 36 : 40).map(function (x) { return x.e; });
     }
     // значок приложения или запасной (iconPath(…, true) возвращает пусто, если значка нет в теме)
-    function iconFor(name) { return Quickshell.iconPath(name || "", true) || Quickshell.iconPath("application-x-executable"); }
+    function iconFor(name) { return Icons.app(name); }
     function launch(e) {
         if (!e) return;
         if (pick) { Config.pin(e.id); open = false; return; }

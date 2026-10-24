@@ -5,6 +5,7 @@
 #   ./install.sh orbit          ТОЛЬКО приложение Orbit (из AUR, из готовой сборки на GitHub или из исходников)
 #   ./install.sh all            оболочка и Orbit
 #   ./install.sh --deps         то же, что без аргументов, но сначала минимум пакетов из minimal.txt (pacman / AUR через yay)
+#   ./install.sh drivers        только драйверы видеокарты и процессора (scripts/system/driver.sh: подбирает ветку и для старых карт)
 #   ./install.sh --restore      вернуть самые свежие прежние файлы оболочки
 #   ./install.sh --help         эта справка
 #
@@ -195,16 +196,36 @@ restore() {
     done
 }
 
+# ---------- драйверы видеокарты и процессора ----------
+# настройщик и списки пакетов кладутся в ~/.local/share/nameless: оттуда их берёт и NameLess UI (вопрос при первом запуске, «Программы» → «Драйверы»)
+install_drivers() {
+    local share="$HOME/.local/share/nameless"
+    mkdir -p "$share/scripts/system" "$share/packages"
+    cp -af "$HERE/scripts/system/driver.sh" "$share/scripts/system/" && chmod +x "$share/scripts/system/driver.sh"
+    cp -af "$HERE"/packages/drivers*.txt "$share/packages/"
+    local st n
+    st="$("$share/scripts/system/driver.sh" --status 2>/dev/null)"
+    n="$(jq -r '.missing // 0' <<<"$st" 2>/dev/null)"
+    head_ "Драйверы видеокарты и процессора"
+    if [[ "${n:-0}" == 0 && "${1:-}" != force ]]; then say "всё нужное уже стоит"; return; fi
+    jq -r '.gpus[] | "  \(.vendor): \(.name) — \(.note)"' <<<"$st" 2>/dev/null
+    local ans=y
+    [[ "${1:-}" == force || ! -t 0 ]] || read -rp "  Поставить недостающие драйверы? [Y/n] " ans
+    [[ -z "$ans" || "$ans" =~ ^[YyДд] ]] || { say "пропущено — потом: ./install.sh drivers или «Программы» → «Драйверы»"; return; }
+    "$share/scripts/system/driver.sh" || FAILED+=("drivers")
+}
+
 # ---------- запуск ----------
 case "${1:-}" in
-    "")          install_shell ;;
+    "")          install_shell; install_drivers ;;
     shell)       install_shell ;;
     orbit)       install_orbit ;;
-    all)         install_shell; install_orbit ;;
-    --deps)      install_deps; install_shell ;;
+    all)         install_shell; install_orbit; install_drivers ;;
+    --deps)      install_deps; install_shell; install_drivers ;;
+    drivers)     install_drivers force ;;
     --restore)   restore; exit 0 ;;
-    -h|--help)   sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *)           warn "не знаю команды «$1». Доступно: orbit, shell, all, --deps, --restore, --help"; exit 2 ;;
+    -h|--help)   sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)           warn "не знаю команды «$1». Доступно: orbit, shell, all, drivers, --deps, --restore, --help"; exit 2 ;;
 esac
 
 echo

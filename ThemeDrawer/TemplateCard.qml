@@ -32,7 +32,7 @@ GTile {
         id: pv
         x: 8; y: 8
         width: parent.width - 16
-        height: parent.height - 52
+        height: parent.height - 18 - info.implicitHeight
         radius: 15
         clip: true
         gradient: Gradient {
@@ -151,13 +151,18 @@ GTile {
         }
     }
 
+    // название и описание целиком: перенос строк вместо многоточия (описание — до двух строк)
     Column {
+        id: info
         anchors { left: parent.left; leftMargin: 12; bottom: parent.bottom; bottomMargin: 9 }
-        width: parent.width - 20
+        width: parent.width - 24
+        spacing: 1
         Text {
             width: parent.width
             text: c.title
             color: c.ui.text
+            wrapMode: Text.WordWrap
+            maximumLineCount: 2
             elide: Text.ElideRight
             font.family: c.ui.font
             font.pixelSize: 13
@@ -165,9 +170,13 @@ GTile {
         }
         Text {
             width: parent.width
+            visible: c.sub !== ""
             text: c.sub
             color: c.ui.sub
+            wrapMode: Text.WordWrap
+            maximumLineCount: 2
             elide: Text.ElideRight
+            lineHeight: 0.95
             font.family: c.ui.font
             font.pixelSize: 11
         }

@@ -11,6 +11,23 @@ Singleton {
     id: c
 
     readonly property bool hyprland: Quickshell.env("HYPRLAND_INSTANCE_SIGNATURE") !== ""
+
+    // настоящие мониторы: без виртуальных (HEADLESS — второй экран Orbit). Окна NameLess на виртуальном мониторе не создаются:
+    // при его удалении Quickshell падал в QScreen::handle(), и вместе с ним пропадали бар, док и виджеты
+    // второй экран Orbit (HEADLESS-ORBIT-N) — тоже экран NameLess (бар, небо): Orbit заранее шлёт «closing», и окна с него убираются
+    // до удаления монитора; прочие виртуальные выходы и закрывающиеся — без окон
+    readonly property var screens: Quickshell.screens.filter(function (s) {
+        var n = String(s.name);
+        if (n.indexOf("HEADLESS") !== 0) return true;
+        // только объявленный сигналом «open» (Orbit 0.2.6+): старые версии не предупреждают об удалении — окна там роняли Quickshell
+        return n.indexOf("HEADLESS-ORBIT") === 0 && OrbitData.virtualScreens[n] !== undefined && OrbitData.closingScreens.indexOf(n) < 0;
+    })
+    function isVirtual(screen) { return screen !== null && screen !== undefined && String(screen.name).indexOf("HEADLESS") === 0; }
+    // главный монитор для дока и виджетов: первый настоящий (порядок Quickshell.screens меняется, когда появляется виртуальный)
+    readonly property var mainScreen: {
+        var real = screens.filter(function (s) { return !isVirtual(s); });
+        return real.length > 0 ? real[0] : (Quickshell.screens.length > 0 ? Quickshell.screens[0] : null);
+    }
     readonly property string name: hyprland ? "Hyprland" : (Quickshell.env("XDG_CURRENT_DESKTOP") || "Wayland")
 
     // рабочие столы (только Hyprland): обычные, по порядку
@@ -27,7 +44,7 @@ Singleton {
     readonly property bool covered: hyprland && Hyprland.focusedWorkspace !== null && Hyprland.focusedWorkspace.toplevels.values.length > 0
 
     readonly property var activeWindow: ToplevelManager.activeToplevel
-    readonly property string rawTitle: activeWindow ? (activeWindow.title || activeWindow.appId || "") : ""
+    readonly property string rawTitle: activeWindow ? String(activeWindow.title || activeWindow.appId || "") : ""      // String: у закрывающегося окна поля уже undefined
     // Заголовок в баре. Терминалы и Claude Code крутят в начале заголовка значок «занят» (◐ ◑ ◒ ◓, ⠋…) по нескольку раз в секунду:
     // каждая смена перерисовывала бар вместе с размытием под ним (~20 % ядра у NameLess и ~50 % iGPU у Hyprland).
     // Значок убирается, а оставшееся обновляется не чаще раза в 0,7 с

@@ -1,21 +1,25 @@
 import QtQuick
 
-// Часы: digital — цифры, analog — стрелки, words — словами («Без четверти четыре»), stack — часы над минутами.
+// Часы: digital — цифры, analog — стрелки, words — словами («Без четверти четыре»), stack — часы над минутами,
+// flip — перекидные карточки (перелистываются раз в минуту), pixel — пиксельные цифры цвета акцента.
 // Параметры — Config.store.clock: 12/24 ч, секунды, дата (длинная / короткая / нет), второй пояс (подпись и смещение от UTC)
 WCard {
     id: w
     readonly property var o: Config.store.clock
-    readonly property real k: width / 300            // масштаб по размеру виджета
+    readonly property real k: Math.max(0.6, width / 300)      // масштаб по размеру виджета (пока ширина ещё не выставлена — не меньше 0,6)
     property date now: new Date()
     readonly property bool sec: o.seconds === true
     readonly property string hfmt: o.h24 === false ? "h" : "HH"
 
-    implicitHeight: o.style === "analog" ? 150 * k + 32 : (o.style === "stack" ? 230 * k : (o.style === "words" ? 128 * k : 118 * k)) + (o.zone ? 22 : 0)
+    implicitHeight: (o.style === "analog" ? 150 * k + 32 : (o.style === "stack" ? 230 * k : (o.style === "words" ? 128 * k
+                    : (o.style === "flip" ? 150 * k : (o.style === "pixel" ? 120 * k : 118 * k))))) + (o.zone ? 22 : 0)
 
     // без секунд — обновление на границе минуты
     Timer {
         interval: w.sec || w.o.style === "analog" ? 1000 : (60 - w.now.getSeconds()) * 1000
-        repeat: true; running: w.visible
+        // стол закрыт окнами — часы не тикают (слой под окнами всё равно не виден); открыли — время сразу верное
+        repeat: true; running: w.visible && !Compositor.covered
+        onRunningChanged: if (running) w.now = new Date()
         onTriggered: w.now = new Date()
     }
 
@@ -78,6 +82,70 @@ WCard {
             font.family: Theme.font
             font.pixelSize: 14 * Math.max(0.85, w.k)
             font.capitalization: Font.Capitalize
+        }
+    }
+
+    // ---------- перекидные карточки ----------
+    Column {
+        visible: w.o.style === "flip"
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: w.o.zone ? -10 : 0
+        spacing: 8
+        Row {
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: 10 * w.k
+            ClockFlip { k: w.k; text: w.now.toLocaleString(Qt.locale("ru_RU"), w.hfmt) }
+            ClockFlip { k: w.k; text: w.now.toLocaleString(Qt.locale("ru_RU"), "mm") }
+        }
+        Text {
+            visible: text !== ""
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: w.dateText(w.now) + w.ampm(w.now)
+            color: Theme.sub; font.family: Theme.font; font.pixelSize: 13; font.capitalization: Font.Capitalize
+        }
+    }
+
+    // ---------- пиксельные цифры: шрифт 3×5, клетки — квадратики цвета акцента ----------
+    readonly property var glyphs: ({
+        "0": "111101101101111", "1": "010110010010111", "2": "111001111100111", "3": "111001111001111", "4": "101101111001001",
+        "5": "111100111001111", "6": "111100111101111", "7": "111001010010010", "8": "111101111101111", "9": "111101111001111", ":": "000010000010000"
+    })
+    Column {
+        visible: w.o.style === "pixel"
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenterOffset: w.o.zone ? -10 : 0
+        spacing: 10
+        Row {
+            id: pix
+            anchors.horizontalCenter: parent.horizontalCenter
+            readonly property real u: 11 * w.k                // размер «пикселя»
+            spacing: u * 0.7
+            Repeater {
+                model: w.o.style === "pixel" ? w.now.toLocaleString(Qt.locale("ru_RU"), w.hfmt + ":mm").split("") : []
+                Grid {
+                    id: glyph
+                    required property string modelData
+                    required property int index
+                    columns: 3; spacing: 1
+                    Repeater {
+                        model: 15
+                        Rectangle {
+                            required property int index
+                            width: pix.u; height: pix.u; radius: pix.u * 0.18
+                            readonly property bool lit: (w.glyphs[glyph.modelData] || "").charAt(index) === "1"
+                            color: lit ? (glyph.index < 2 ? Theme.accent : Theme.text) : Qt.rgba(Theme.text.r, Theme.text.g, Theme.text.b, 0.05)
+                        }
+                    }
+                }
+            }
+        }
+        Text {
+            visible: text !== ""
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: w.dateText(w.now) + w.ampm(w.now)
+            color: Theme.sub; font.family: Theme.font; font.pixelSize: 13; font.capitalization: Font.Capitalize
         }
     }
 

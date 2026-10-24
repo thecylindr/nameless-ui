@@ -74,7 +74,7 @@ WCard {
             }
         }
     }
-    Timer { interval: 60000; repeat: true; running: w.visible && w.o.disk; triggeredOnStart: true; onTriggered: if (!dfProc.running) dfProc.running = true }
+    Timer { interval: 60000; repeat: true; running: w.visible && w.o.disk && !Compositor.covered; triggeredOnStart: true; onTriggered: if (!dfProc.running) dfProc.running = true }
     Process {
         id: gpuProc
         command: ["nvidia-smi", "--query-gpu=utilization.gpu,temperature.gpu", "--format=csv,noheader,nounits"]
@@ -93,7 +93,7 @@ WCard {
         }
         if (!gpuProc.running) gpuProc.running = true;
     }
-    Timer { interval: Math.max(5, w.every) * 1000; repeat: true; running: w.visible && w.o.gpu === true; triggeredOnStart: true; onTriggered: w.pollGpu() }
+    Timer { interval: Math.max(5, w.every) * 1000; repeat: true; running: w.visible && w.o.gpu === true && !Compositor.covered; triggeredOnStart: true; onTriggered: w.pollGpu() }
 
     function sample() {
         var now = Date.now(), c = Object.assign({}, cur);
@@ -134,7 +134,7 @@ WCard {
         function push(a, v) { var x = a.slice(-(histLen - 1)); x.push(v); return x; }
         hist = { cpu: push(hist.cpu, c.cpu / 100), ram: push(hist.ram, c.ram), temp: push(hist.temp, Math.min(1, c.temp / 100)), net: push(hist.net, c.down + c.up) };
     }
-    Timer { interval: w.every * 1000; repeat: true; running: w.visible; triggeredOnStart: true; onTriggered: w.sample() }
+    Timer { interval: w.every * 1000; repeat: true; running: w.visible && !Compositor.covered; triggeredOnStart: true; onTriggered: w.sample() }
 
     function ghz(m) { return m >= 1000 ? (m / 1000).toFixed(2).replace(".", ",") + Tr.t(" ГГц") : m + Tr.t(" МГц"); }
     function speed(b) { return b >= 1048576 ? (b / 1048576).toFixed(1) + Tr.t(" МБ/с") : (b / 1024).toFixed(0) + Tr.t(" КБ/с"); }

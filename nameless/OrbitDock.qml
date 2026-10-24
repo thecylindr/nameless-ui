@@ -92,7 +92,7 @@ PanelWindow {
                 Item {
                     id: it
                     required property var modelData
-                    readonly property real bat: modelData.battery
+                    readonly property real bat: ["phone", "tablet", "laptop"].indexOf(modelData.kind) >= 0 ? modelData.battery : -1      // у ПК батареи нет
                     width: 38; height: row.height
                     Rectangle {
                         id: circ
