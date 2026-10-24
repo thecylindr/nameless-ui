@@ -276,7 +276,8 @@ Scope {
         linksAll.forEach(function (l) { now[l.device] = l; });
         if (ready) {
             for (var d in now) if (!seen[d]) show({ dir: "in", side: now[d].side, pos: 0.5, screen: (screenFor(now[d].side) || {}).name || "", soft: true, link: true });
-            for (var o in seen) if (!now[o]) show({ dir: "out", side: seen[o].side, pos: 0.5, screen: (screenFor(seen[o].side) || {}).name || "", soft: true, link: true });
+            // сосед пропал — разрыв: красный эффект с крестом, а не обычный «уход» курсора
+            for (var o in seen) if (!now[o]) show({ dir: "deny", side: seen[o].side, pos: 0.5, screen: (screenFor(seen[o].side) || {}).name || "", soft: true, link: true });
         }
         seen = now;
     }
@@ -372,8 +373,10 @@ Scope {
     }
 
     // сигнал Orbit: dbus-monitor печатает строковый аргумент отдельной строкой «string "{…}"»
+    // слушается всегда, пока Orbit запущен: на компьютере, куда курсор пришёл, переход часто не включён (он включается там, откуда уходят),
+    // и эффект прихода раньше не показывался вовсе
     Process {
-        running: cross.cfg.enabled === true && OrbitData.enabled && OrbitData.running
+        running: OrbitData.enabled && OrbitData.running
         command: ["dbus-monitor", "--session", "type='signal',interface='" + OrbitData.svc + "',member='Crossing'"]
         stdout: SplitParser {
             onRead: line => {

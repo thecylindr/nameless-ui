@@ -241,6 +241,37 @@ PanelWindow {
                     }
                 }
 
+                // сигналы событий (FxSignal): подключилось — зелёная галочка, разрыв — красный крест со вздрагиванием и «рваной» линией
+                Rectangle {
+                    width: parent.width; height: sigCol.implicitHeight + 24; radius: Theme.r(18)
+                    color: Theme.fill(0.06); border.width: Theme.ios ? 0 : 1; border.color: Theme.line(0.14)
+                    readonly property var sg: Config.store.signals || ({})
+                    Column {
+                        id: sigCol
+                        x: 14; y: 12; width: parent.width - 28
+                        spacing: 8
+                        Text { text: Tr.t("Сигналы событий"); color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
+                        Text { width: parent.width; wrapMode: Text.WordWrap; text: Tr.t("Подключилось — зелёная галочка с волнами; разрыв — красный крест, плашка вздрагивает, линия рвётся. Нажмите на источник, чтобы выключить его."); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+                        GSwitch { ui: Theme; width: parent.width; label: Tr.t("Показывать сигналы"); checked: parent.parent.sg.enabled !== false; onToggled: (v) => Config.set("signals.enabled", v) }
+                        GSwitch { ui: Theme; width: parent.width; label: Tr.t("И положительные"); sub: Tr.t("выключено — только разрывы и пропажи"); checked: parent.parent.sg.good !== false; onToggled: (v) => Config.set("signals.good", v) }
+                        Flow {
+                            width: parent.width; spacing: 6
+                            Repeater {
+                                model: [["orbit", "Orbit"], ["wifi", "Wi-Fi"], ["bt", "Bluetooth"], ["power", "Зарядка"]]
+                                Rectangle {
+                                    id: sch
+                                    required property var modelData
+                                    readonly property bool on: ((Config.store.signals || {}).sources || {})[modelData[0]] !== false
+                                    width: schT.implicitWidth + 28; height: 30; radius: 15
+                                    color: on ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.85) : Theme.fill(0.08)
+                                    Text { id: schT; anchors.centerIn: parent; text: (sch.on ? "󰄬 " : "󰅖 ") + Tr.t(sch.modelData[1]); color: sch.on ? "white" : Theme.sub; font.family: Theme.iconFont; font.pixelSize: 12 }
+                                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: Config.set("signals.sources." + sch.modelData[0], !sch.on) }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // какие окна NameLess показывать в rofi и лаунчере
                 Rectangle {
                     visible: (Config.store.apps || {}).entries !== false && w.shell !== null

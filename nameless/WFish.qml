@@ -17,7 +17,7 @@ WCard {
     // вода: тёмная глубина книзу, по краям — скругление карточки
     Rectangle {
         anchors.fill: parent
-        radius: Theme.ios ? 26 : 20
+        radius: Theme.r(w.radius)
         clip: true
         gradient: Gradient {
             GradientStop { position: 0.0; color: Qt.rgba(0.20, 0.55, 0.85, 0.35) }

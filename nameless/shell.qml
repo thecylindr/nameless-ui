@@ -231,6 +231,7 @@ ShellRoot {
     EdgeSwipe { shell: root }
     Widgets { shell: root }
     CrossEdge { id: crossEdge }
+    FxSignal { id: fxSignal }
     Dock { shell: root }
     OrbitDock { shell: root }
     Lock { id: lock }
@@ -250,6 +251,11 @@ ShellRoot {
     IpcHandler {
         target: "control"
         function toggle(): void { root.toggleControl(); }
+    }
+    // пример сигнала: qs -c nameless ipc call signal test bad
+    IpcHandler {
+        target: "signal"
+        function test(kind: string): void { fxSignal.preview(kind === "bad"); }
     }
     IpcHandler {
         target: "desktop"

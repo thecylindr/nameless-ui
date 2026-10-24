@@ -11,7 +11,7 @@ WCard {
     readonly property int lead: (first.getDay() + 6) % 7
     readonly property int days: new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate()
     readonly property int cols: weeks ? 8 : 7
-    readonly property real cell: width / cols
+    readonly property real cell: cw / cols                   // по ширине содержимого: от ширины карточки последний столбец вылезал за край
     readonly property int rowsN: Math.ceil((lead + days) / 7)
     implicitHeight: pad * 2 + 22 + 8 + 18 + rowsN * cell * 0.8
 

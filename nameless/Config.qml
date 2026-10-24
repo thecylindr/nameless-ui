@@ -57,6 +57,11 @@ Singleton {
             trash: true         // корзина справа
         },
         widgets: {
+            corners: 0,         // углы карточек: 0 — по комплекту, иначе радиус (8 | 16 | 28)
+            border: "none",     // обводка: none | thin | accent | gradient
+            density: "normal",  // отступы: compact | normal | roomy
+            glow: false,        // акцентный свет сверху
+            opacity: 1,         // плотность фона карточек (0,3–1)
             align: "center",    // по рядам: left | center | right | fill (колонки на всю ширину)
             scale: "auto",      // масштаб виджетов: auto — по размеру экрана, или число (0.85 … 1.5)
             cols: 0,            // колонок (0 — авто): ряды и колонки делят ширину поровну, масштаб — под ширину колонки
@@ -120,6 +125,7 @@ Singleton {
         orbit: { enabled: true, bar: true, dock: true, indock: false, autostart: true, claude: true, claudeMin: 20 },   // claude — сообщать на устройства, что Claude закончил работу; claudeMin — не короче стольких секунд             // верхний док устройств; запуск Orbit в фоне, когда он нужен
         // переход курсора между компьютерами (Orbit): links — [{ device, name, side }], side — край этого экрана (left|right|top|bottom|off);
         // effect — glow | ripple | sparks | line | portal | none; color — accent | accent2 | white | #RRGGBB; delay — задержка на краю, мс
+        signals: { enabled: true, good: true, sources: { orbit: true, wifi: true, bt: true, power: true } },     // сигналы событий (FxSignal)
         crossing: { enabled: false, monitors: true, effect: "auto", motion: "smooth", bloom: true, particles: true, reducedMotion: false, portalDepth: 1.0, effectOut: "", effectIn: "", color: "accent", duration: 700, intensity: 1.0, delay: 120, links: [], scenes: { out: true, in: true, deny: true, link: true, hint: true },
                     actions: { clipboard: true, badge: true, quiet: false } },        // вспомогательные действия при переходе курсора на другой компьютер
         touchpad: { left: "", right: "", middle: "", dot: "", dotSize: 9 },        // цвета — имя цвета темы (accent, red, green…) или #RRGGBB; пусто — по умолчанию

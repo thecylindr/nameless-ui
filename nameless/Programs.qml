@@ -191,9 +191,14 @@ PanelWindow {
     property var iconHits: []
     property string iconFor: ""            // значок приложения, которому выбирается замена (пусто — просто поиск)
     property string iconNote: ""
-    Process { id: iconsProc; command: [w.iconsScript, "list"]; stdout: StdioCollector { onStreamFinished: { try { w.icons = JSON.parse(text); } catch (e) { } } } }
+    // скрипты запускаются через bash: после копирования сборки без бита запуска Process молча не стартовал — каталог «не грузился», значков было 0
+    Process {
+        id: iconsProc; command: ["bash", w.iconsScript, "list"]
+        stdout: StdioCollector { onStreamFinished: { try { w.icons = JSON.parse(text); } catch (e) { } } }
+        onExited: (code) => { if (code !== 0) w.iconNote = Tr.t("Не удалось прочитать темы иконок (icons.sh, код ") + code + ")"; }
+    }
     Process { id: iconSearch; stdout: StdioCollector { onStreamFinished: { try { w.iconHits = JSON.parse(text); } catch (e) { w.iconHits = []; } } } }
-    function findIcons(q) { iconSearch.running = false; iconSearch.command = [iconsScript, "search", icons.current || "hicolor", q, "120"]; iconSearch.running = true; }
+    function findIcons(q) { iconSearch.running = false; iconSearch.command = ["bash", iconsScript, "search", icons.current || "hicolor", q, "120"]; iconSearch.running = true; }
     Process {
         id: iconSet
         stdout: StdioCollector {
@@ -205,7 +210,7 @@ PanelWindow {
             }
         }
     }
-    function setIconTheme(id) { iconSet.command = [iconsScript, "set", id]; iconSet.running = true; }
+    function setIconTheme(id) { iconSet.command = ["bash", iconsScript, "set", id]; iconSet.running = true; }
     // каталог gnome-look.org (icons.sh store): сборки иконок от людей, с автором и ссылкой на страницу
     property var store: []
     property int storeTotal: 0
@@ -221,10 +226,12 @@ PanelWindow {
                 try { var r = JSON.parse(text); w.storeTotal = r.total || 0; w.store = w.storePage === 0 ? (r.items || []) : w.store.concat(r.items || []); if (r.error) w.iconNote = r.error; } catch (e) { w.iconNote = Tr.t("Каталог не ответил"); }
             }
         }
+        // скрипт не запустился или упал — загрузка не должна крутиться вечно
+        onExited: (code) => { if (w.storeLoading) { w.storeLoading = false; w.iconNote = Tr.t("Каталог не загрузился (icons.sh, код ") + code + ")"; } }
     }
     function loadStore(q, more) {
         storeQuery = q; storePage = more ? storePage + 1 : 0; storeLoading = true;
-        storeProc.running = false; storeProc.command = [iconsScript, "store", String(storePage), q]; storeProc.running = true;
+        storeProc.running = false; storeProc.command = ["bash", iconsScript, "store", String(storePage), q]; storeProc.running = true;
     }
     Process {
         id: storeInst
@@ -239,7 +246,7 @@ PanelWindow {
     function installStore(item) {
         if (!item.files || item.files.length === 0) { iconNote = Tr.t("У сборки нет архива для скачивания — откройте страницу"); return; }
         storeBusy = String(item.id); iconNote = Tr.t("Скачиваю ") + item.name + "…";
-        storeInst.command = [iconsScript, "store-install", item.files[0].link, item.files[0].name]; storeInst.running = true;
+        storeInst.command = ["bash", iconsScript, "store-install", item.files[0].link, item.files[0].name]; storeInst.running = true;
     }
 
     // ---------- драйверы видеокарты и процессора (driver.sh --status) ----------

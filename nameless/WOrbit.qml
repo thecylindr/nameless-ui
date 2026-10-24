@@ -26,7 +26,7 @@ WCard {
             Text {
                 text: w.off ? Tr.t("нажмите, чтобы включить") : !w.up ? (OrbitData.launchState === "starting" ? Tr.t("запускается…") : OrbitData.launchState === "failed" ? OrbitData.launchError : Tr.t("нажмите, чтобы запустить")) : (OrbitData.requests > 0 ? Tr.t("Запрос на сопряжение: ") + OrbitData.requests : (OrbitData.discovery ? Tr.t("поиск включён") : Tr.t("поиск выключен")))
                 color: !w.up && OrbitData.launchState === "failed" ? Theme.red : (OrbitData.requests > 0 ? Theme.yellow : Theme.sub); font.family: Theme.font; font.pixelSize: 11
-                width: w.width - 60; elide: Text.ElideRight
+                width: w.cw - 40; elide: Text.ElideRight
             }
         }
     }

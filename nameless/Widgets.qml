@@ -140,9 +140,11 @@ PanelWindow {
         }
         return Qt.point(x, y);
     }
-    readonly property real cellW: fixedGrid ? (width - 32 - (fixedCols - 1) * gap) / fixedCols : 300 * ws
+    // колонки: сколько помещается при ширине 300 (с масштабом), затем они растягиваются на всю ширину — раньше остаток экрана
+    // оставался пустой полосой справа или слева
     readonly property real gap: 16 * ws
-    readonly property int cols: fixedGrid ? fixedCols : Math.max(1, Math.floor((width - 32 + gap) / (cellW + gap)))
+    readonly property int cols: fixedGrid ? fixedCols : Math.max(1, Math.floor((width - 32 + gap) / (300 * ws + gap)))
+    readonly property real cellW: width > 0 ? Math.max(120, (width - 32 - (cols - 1) * gap) / cols) : 300 * ws
     // колонка по номеру: от левого края или, если колонки справа, от правого
     function colX(c) { return right ? width - 16 - (c + 1) * cellW - c * gap : 16 + c * (cellW + gap); }
     function spanOf(it) { return it.size === "L" ? 2 : 1; }
@@ -265,7 +267,7 @@ PanelWindow {
     readonly property real ws: fixedGrid && width > 0 ? Math.max(0.6, Math.min(2.2, fixedColW / 300))
                                : ((scaleOpt === undefined || scaleOpt === "auto") && width > 0 && height > 0
                                   ? Math.max(0.85, Math.min(1.5, Math.min(width / 1920, height / 1080)))
-                                  : Math.max(0.6, Math.min(2, Number(scaleOpt) || 1)))
+                                  : Math.max(0.5, Math.min(2, Number(scaleOpt) || 1)))
     // выравнивание рядов: left — прижаты влево, center — по центру, right — вправо, fill — колонки на всю ширину экрана
     readonly property string align: Config.widgets.align || "center"
     readonly property real autoMin: 280 * ws

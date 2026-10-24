@@ -111,10 +111,52 @@ PanelWindow {
                         label: Tr.t("Фон карточек")
                         GSegment {
                             ui: Theme
-                            options: [{ v: "glass", t: Tr.t("Стекло") }, { v: "solid", t: Tr.t("Плотный") }, { v: "clear", t: Tr.t("Без фона") }]
+                            options: [{ v: "glass", t: Tr.t("Стекло") }, { v: "solid", t: Tr.t("Плотный") }, { v: "tint", t: Tr.t("Акцент") }, { v: "outline", t: Tr.t("Контур") }, { v: "clear", t: Tr.t("Без фона") }]
                             value: Config.widgets.look || "glass"
                             onPicked: (v) => Config.set("widgets.look", v)
                         }
+                    }
+                    // оформление карточек — общее для всех виджетов (WCard)
+                    Labeled {
+                        visible: (Config.widgets.look || "glass") !== "clear"
+                        label: Tr.t("Углы")
+                        GSegment {
+                            ui: Theme
+                            options: [{ v: "0", t: Tr.t("По теме") }, { v: "8", t: Tr.t("Острые") }, { v: "16", t: Tr.t("Мягкие") }, { v: "28", t: Tr.t("Круглые") }]
+                            value: String(Config.widgets.corners || 0)
+                            onPicked: (v) => Config.set("widgets.corners", Number(v))
+                        }
+                    }
+                    Labeled {
+                        visible: (Config.widgets.look || "glass") !== "clear"
+                        label: Tr.t("Обводка")
+                        GSegment {
+                            ui: Theme
+                            options: [{ v: "none", t: Tr.t("Нет") }, { v: "thin", t: Tr.t("Тонкая") }, { v: "accent", t: Tr.t("Акцент") }, { v: "gradient", t: Tr.t("Градиент") }]
+                            value: Config.widgets.border || "none"
+                            onPicked: (v) => Config.set("widgets.border", v)
+                        }
+                    }
+                    Labeled {
+                        label: Tr.t("Отступы")
+                        GSegment {
+                            ui: Theme
+                            options: [{ v: "compact", t: Tr.t("Плотно") }, { v: "normal", t: Tr.t("Обычно") }, { v: "roomy", t: Tr.t("Просторно") }]
+                            value: Config.widgets.density || "normal"
+                            onPicked: (v) => Config.set("widgets.density", v)
+                        }
+                    }
+                    GSwitch {
+                        visible: (Config.widgets.look || "glass") !== "clear"
+                        ui: Theme; label: Tr.t("Свет сверху"); sub: Tr.t("мягкое свечение акцентом по верху карточки")
+                        checked: Config.widgets.glow === true; onToggled: (v) => Config.set("widgets.glow", v)
+                    }
+                    PillSlider {
+                        visible: ["glass", "solid", "tint"].indexOf(Config.widgets.look || "glass") >= 0
+                        ui: Theme; width: parent.width; icon: "󰃞"; label: Tr.t("Плотность фона")
+                        from: 30; to: 100; stepSize: 5; decimals: 0; suffix: "%"
+                        value: Math.round((Config.widgets.opacity === undefined ? 1 : Config.widgets.opacity) * 100)
+                        onCommitted: (v) => Config.set("widgets.opacity", v / 100)
                     }
                     Labeled {
                         label: Tr.t("Расстановка")
@@ -165,7 +207,7 @@ PanelWindow {
                         label: Tr.t("Масштаб")
                         GSegment {
                             ui: Theme
-                            options: [{ v: "auto", t: Tr.t("Авто") }, { v: "0.85", t: "85%" }, { v: "1", t: "100%" }, { v: "1.15", t: "115%" }, { v: "1.3", t: "130%" }, { v: "1.5", t: "150%" }]
+                            options: [{ v: "auto", t: Tr.t("Авто") }, { v: "0.5", t: "50%" }, { v: "0.7", t: "70%" }, { v: "0.85", t: "85%" }, { v: "1", t: "100%" }, { v: "1.15", t: "115%" }, { v: "1.3", t: "130%" }, { v: "1.5", t: "150%" }]
                             value: String(Config.widgets.scale === undefined ? "auto" : Config.widgets.scale)
                             onPicked: (v) => Config.set("widgets.scale", v === "auto" ? "auto" : Number(v))
                         }

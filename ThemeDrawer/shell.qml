@@ -253,6 +253,8 @@ ShellRoot {
     Process {
         id: setProc
         onRunningChanged: if (!running) root.nextSet()
+        // встроенный шаблон не меняется: theme.sh создал свой «… · моё» — сообщаем, куда ушли правки
+        stdout: SplitParser { onRead: line => { if (line.indexOf("forked:") === 0) { root.savedNote = Tr.t("Шаблон не меняется — правки сохранены в «") + line.slice(7) + "»"; noteT.restart(); } } }
     }
     function nextSet() {
         if (setProc.running) return;
@@ -776,7 +778,9 @@ ShellRoot {
                 Text { text: Tr.t("Шаблоны"); color: look.sub; font.family: look.font; font.pixelSize: 12; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.8; leftPadding: 4 }
                 Grid {
                     id: tplGrid
-                    readonly property int cols: panel.wide ? Math.max(1, Math.min(root.view.cols || 2, 6,  Math.floor(themesLeft.width / 340))) : Math.max(1, root.view.cols || 2)
+                    // колонки — по ширине (карточка не уже 300): кнопки справа занимают ~70 px, и при двух колонках в узкой шторке
+                    // название съедалось до «…»
+                    readonly property int cols: Math.max(1, Math.min(6, Math.floor((width + spacing) / (300 + spacing))))
                     columns: cols
                     spacing: 10
                     Repeater {
@@ -879,7 +883,9 @@ ShellRoot {
                 Grid {
                     id: mine
                     width: parent.width
-                    readonly property int cols: panel.wide ? Math.max(1, Math.min(root.view.cols || 2, 6,  Math.floor(themesLeft.width / 340))) : Math.max(1, root.view.cols || 2)
+                    // колонки — по ширине (карточка не уже 300): кнопки справа занимают ~70 px, и при двух колонках в узкой шторке
+                    // название съедалось до «…»
+                    readonly property int cols: Math.max(1, Math.min(6, Math.floor((width + spacing) / (300 + spacing))))
                     columns: cols
                     spacing: 8
                     readonly property real cw: (width - spacing * (cols - 1)) / cols

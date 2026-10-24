@@ -28,8 +28,8 @@ Singleton {
         else if (pr.night === "off") Quickshell.execDetached(["sh", "-c", "pkill -x hyprsunset"]);
         // анимации и размытие — параметры темы Hyprland; меняются, только если отличаются (смена перечитывает правила)
         var hy = (Theme.th && Theme.th.hypr) ? Theme.th.hypr : ({});
-        if ((pr.animations === "on" || pr.animations === "off") && hy.animations !== (pr.animations === "on")) Quickshell.execDetached([Theme.script, "set", ".hypr.animations", pr.animations === "on" ? "true" : "false"]);
-        if ((pr.blur === "on" || pr.blur === "off") && hy.blur !== (pr.blur === "on")) Quickshell.execDetached([Theme.script, "set", ".hypr.blur", pr.blur === "on" ? "true" : "false"]);
+        if ((pr.animations === "on" || pr.animations === "off") && hy.animations !== (pr.animations === "on")) Quickshell.execDetached([Theme.script, "set-auto", ".hypr.animations", pr.animations === "on" ? "true" : "false"]);
+        if ((pr.blur === "on" || pr.blur === "off") && hy.blur !== (pr.blur === "on")) Quickshell.execDetached([Theme.script, "set-auto", ".hypr.blur", pr.blur === "on" ? "true" : "false"]);
         if ((pr.brightness || 0) > 0) Sys.setBrightness(pr.brightness);
         // подсветка: выкл — погасить, вкл — вернуть сохранённый цвет
         if (pr.rgb === "off" || pr.rgb === "on")
