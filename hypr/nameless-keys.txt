@@ -1,0 +1,22 @@
+# Клавиши NameLess UI — единый список. install.sh собирает из него привязки Hyprland (nameless-binds.lua или .conf),
+# driftwm (раздел [keybindings]) и справку SUPER+F1 (~/.config/hypr/keybinds.txt, если её ещё нет).
+# Формат: модификаторы|клавиша|действие nameless-action.sh|раздел справки|что делает. Модификаторы — через «+», SUPER подразумевается
+SUPER|R|menu|Программы|Лаунчер приложений
+SUPER|period|emoji|Программы|Эмодзи и символы
+SUPER|I|programs|Программы|Программы: каталог, установка, иконки, драйверы
+SUPER|O|orbit|Программы|Устройства (Orbit)
+SUPER|X|drawer|Оформление|Шторка оформления
+SUPER|Z|control-center|Оформление|Пункт управления: плитки, звук, яркость, режимы
+SUPER|B|wallpapers|Оформление|Выбор обоев
+SUPER|W|desktop|Оформление|Рабочий стол: виджеты и док
+SUPER|F1|keys|Оформление|Клавиши и справка
+SUPER|N|notif-panel|Уведомления|Список уведомлений
+SUPER+SHIFT|N|notif-dnd|Уведомления|Не беспокоить вкл/выкл
+SUPER+ALT|N|notif-close|Уведомления|Закрыть уведомления
+SUPER|L|lock|Система|Заблокировать экран
+-|Print|screenshot|Система|Скриншот области
+SUPER+CTRL|Escape|tasks|Система|Диспетчер задач
+SUPER+SHIFT|V|clipboard|Система|Буфер обмена: история, поиск, закреплённое
+SUPER+SHIFT|T|ocr|Система|Текст с экрана: выделить область — в буфер
+SUPER+ALT|R|record|Система|Запись экрана: начать / остановить
+SUPER+ALT+SHIFT|R|record-area|Система|Запись области экрана

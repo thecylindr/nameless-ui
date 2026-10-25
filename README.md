@@ -41,8 +41,11 @@
 
 ```bash
 git clone https://github.com/thecylindr/nameless-ui.git && cd nameless-ui
-./install.sh                 # копирует nameless и ThemeDrawer в ~/.config/quickshell (прежние — в бэкап)
+./install.sh                 # копирует nameless и ThemeDrawer в ~/.config/quickshell (прежние — в бэкап) и ставит клавиши
+./install.sh keys            # только клавиши (после обновления)
 ```
+
+Клавиши NameLess UI (SUPER+R, SUPER+Z, SUPER+X, SUPER+SHIFT+V… — список в `hypr/nameless-keys.txt`) ставятся сами: в Hyprland — файлом `~/.config/hypr/nameless-binds.lua` (или `.conf`), подключённым в конце конфига, прежняя привязка того же сочетания снимается; в driftwm — в раздел `[keybindings]`, кроме сочетаний с его собственными действиями. Копии конфигов — `*.nameless-bak`.
 
 **Вручную:**
 
@@ -58,7 +61,7 @@ qs -c ThemeDrawer &          # шторка «Оформление»
 ```bash
 ./install.sh --deps      # минимум пакетов из minimal.txt (≈ 22 пакета) + оболочка
 ```
-Или только копирование файлов: `./install.sh`. Необязательное (запись экрана, обои с плавной сменой, GIF, btop) — в `minimal-optional.txt`, ставится по желанию. Драйверы, приложения, экран входа и ваши конфиги Hyprland не трогаются.
+Или только копирование файлов: `./install.sh`. Необязательное (запись экрана, обои с плавной сменой, GIF, btop) — в `minimal-optional.txt`, ставится по желанию. Драйверы, приложения и экран входа не трогаются; в конфиг Hyprland и driftwm добавляются только клавиши NameLess UI (с копией *.nameless-bak).
 
 **Нужно:** `quickshell`, Hyprland (или driftwm), PipeWire, шрифт Nerd Font (значки). Для отдельных частей: `cliphist` и `wl-clipboard` (буфер), `gpu-screen-recorder` или `wf-recorder`, `slurp` и `ffmpeg` (запись), `hyprpicker` (пипетка), `playerctl`, `NetworkManager`, `awww` (обои с плавной сменой).
 

@@ -83,18 +83,10 @@ PanelWindow {
     }
 
     // ---------- установка: терминал с pacman, потом повторная проверка ----------
-    property bool installing: false
-    Process {
-        id: installProc
-        onExited: { w.installing = false; w.check(); }
-    }
-    function install(pkgs) {
-        if (installing || pkgs.length === 0) return;
-        installing = true;
-        installProc.command = ["kitty", "--class", "glassrice-pkg", "-e", "sh", "-c",
-            "echo 'Устанавливаю: " + pkgs.join(" ") + "'; sudo pacman -S --needed " + pkgs.join(" ") + Tr.t("; echo; read -r -n1 -p 'Готово. Нажмите любую клавишу…'")];
-        installProc.running = true;
-    }
+    // терминал запускает оболочка (shell.installPkgs): окно на это время прячется, потом возвращается и перепроверяет
+    readonly property bool installing: shell ? shell.pkgBusy : false
+    Connections { target: w.shell; ignoreUnknownSignals: true; function onPkgsInstalled() { w.check(); } }
+    function install(pkgs) { if (shell && pkgs.length > 0) shell.installPkgs(pkgs, "features"); }
 
     // ---------- что занимает сам NameLess (при открытом окне, раз в 2 с) ----------
     property real cpu: 0

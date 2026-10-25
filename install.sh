@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Установка NameLess UI и NameLess Orbit.
 #
-#   ./install.sh                оболочка: nameless и шторка «Оформление» (ThemeDrawer) → ~/.config/quickshell (прежние — в бэкап)
+#   ./install.sh                оболочка: nameless, шторка «Оформление» (ThemeDrawer) и клавиши → ~/.config/quickshell (прежние — в бэкап)
 #   ./install.sh orbit          ТОЛЬКО приложение Orbit (из AUR, из готовой сборки на GitHub или из исходников)
 #   ./install.sh all            оболочка и Orbit
 #   ./install.sh --deps         то же, что без аргументов, но сначала минимум пакетов из minimal.txt (pacman / AUR через yay)
+#   ./install.sh keys           только клавиши NameLess UI (Hyprland, driftwm, справка SUPER+F1) — список в hypr/nameless-keys.txt
 #   ./install.sh drivers        только драйверы видеокарты и процессора (scripts/system/driver.sh: подбирает ветку и для старых карт)
 #   ./install.sh --restore      вернуть самые свежие прежние файлы оболочки
 #   ./install.sh --help         эта справка
@@ -58,6 +59,11 @@ install_shell() {
         sed -i '0,/^\( *\)terminal:.*$/s||&\n  run-command:         "sh -c '"'"'r=\\"$HOME/.config/hypr/Scripts/rofi-run.sh\\"; if [ -x \\"$r\\" ]; then exec \\"$r\\" \\"$@\\"; else exec \\"$@\\"; fi'"'"' _ {cmd}";|' "$HOME/.config/rofi/config.rasi"
         say "rofi: добавлен запуск через rofi-run.sh (копия прежнего конфига — config.rasi.bak)"
     fi
+    # системные скрипты окон NameLess UI (иконки и каталог gnome-look, подсветка, питание, видеокарта, драйверы) — в ~/.local/share/nameless:
+    # оттуда их берут «Программы», «Функции» и диспетчер задач; без них вкладка «Иконки» падала с кодом 127
+    mkdir -p "$HOME/.local/share/nameless/scripts/system"
+    cp -af "$HERE"/scripts/system/*.sh "$HOME/.local/share/nameless/scripts/system/" && chmod +x "$HOME/.local/share/nameless/scripts/system/"*.sh
+    say "системные скрипты — в ~/.local/share/nameless/scripts/system"
     # папки — в Dolphin, а не в терминале (xdg-open без этой привязки берёт kitty-open)
     [[ -f /usr/share/applications/org.kde.dolphin.desktop ]] && xdg-mime default org.kde.dolphin.desktop inode/directory 2>/dev/null
 }
@@ -215,17 +221,102 @@ install_drivers() {
     "$share/scripts/system/driver.sh" || FAILED+=("drivers")
 }
 
+# ---------- клавиши NameLess UI ----------
+# Один список — hypr/nameless-keys.txt; из него собираются привязки под то, что стоит:
+#   Hyprland с Lua-конфигом — ~/.config/hypr/nameless-binds.lua, подключается в конце hyprland.lua (сочетание сначала снимается,
+#     прежняя привязка не срабатывает вместе с новой);
+#   Hyprland с hyprland.conf — ~/.config/hypr/nameless-binds.conf (unbind + bind), подключается строкой source;
+#   driftwm — строки в разделе [keybindings]; сочетание со встроенным действием driftwm (навигация, масштаб) не трогается и выводится списком;
+#   справка SUPER+F1 — ~/.config/hypr/keybinds.txt, если её ещё нет (у полной сборки она своя).
+# Действия — scripts/nameless-action.sh (с полной сборкой уходят в theme.sh, без неё — прямо в NameLess UI). Конфиги — с копией *.nameless-bak
+install_keys() {
+    head_ "Клавиши NameLess UI"
+    local list="$HERE/hypr/nameless-keys.txt" hypr="$HOME/.config/hypr" act="$HOME/.config/hypr/Scripts/nameless-action.sh"
+    [[ -f "$list" ]] || { warn "нет $list — клавиши пропущены"; FAILED+=("keys"); return; }
+    mkdir -p "$hypr/Scripts"
+    cp -af "$HERE/scripts/nameless-action.sh" "$HERE/scripts/ocr.sh" "$hypr/Scripts/" && chmod +x "$hypr/Scripts/nameless-action.sh" "$hypr/Scripts/ocr.sh"
+    local rows; rows="$(grep -v '^#' "$list" | grep -v '^[[:space:]]*$')"
+
+    # Hyprland
+    if [[ -f "$hypr/hyprland.lua" ]]; then
+        {
+            echo "-- Клавиши NameLess UI: собрано install.sh из hypr/nameless-keys.txt — файл перезаписывается при установке"
+            echo "local act = os.getenv(\"HOME\") .. \"/.config/hypr/Scripts/nameless-action.sh \""
+            while IFS='|' read -r mods key action _ _; do
+                local k="$key"; [[ "$mods" != "-" ]] && k="${mods//+/ + } + $key"
+                echo "pcall(hl.unbind, \"$k\"); hl.bind(\"$k\", hl.dsp.exec_cmd(act .. \"$action\"))"
+            done <<<"$rows"
+        } > "$hypr/nameless-binds.lua"
+        local inc='pcall(function() dofile(os.getenv("HOME") .. "/.config/hypr/nameless-binds.lua") end)'
+        if ! grep -qF "nameless-binds.lua" "$hypr/hyprland.lua"; then
+            cp -a "$hypr/hyprland.lua" "$hypr/hyprland.lua.nameless-bak"
+            printf '\n-- клавиши NameLess UI (install.sh); свои привязки — ниже этой строки\n%s\n' "$inc" >> "$hypr/hyprland.lua"
+            say "Hyprland: клавиши подключены в конце hyprland.lua (копия — hyprland.lua.nameless-bak)"
+        else say "Hyprland: клавиши обновлены (nameless-binds.lua)"; fi
+    elif [[ -f "$hypr/hyprland.conf" ]]; then
+        {
+            echo "# Клавиши NameLess UI: собрано install.sh из hypr/nameless-keys.txt — файл перезаписывается при установке"
+            while IFS='|' read -r mods key action _ _; do
+                local m=""; [[ "$mods" != "-" ]] && m="${mods//+/ }"
+                echo "unbind = $m, $key"
+                echo "bind = $m, $key, exec, $act $action"
+            done <<<"$rows"
+        } > "$hypr/nameless-binds.conf"
+        if ! grep -qF "nameless-binds.conf" "$hypr/hyprland.conf"; then
+            cp -a "$hypr/hyprland.conf" "$hypr/hyprland.conf.nameless-bak"
+            printf '\n# клавиши NameLess UI (install.sh)\nsource = %s\n' "$hypr/nameless-binds.conf" >> "$hypr/hyprland.conf"
+            say "Hyprland: клавиши подключены в hyprland.conf (копия — hyprland.conf.nameless-bak)"
+        else say "Hyprland: клавиши обновлены (nameless-binds.conf)"; fi
+    fi
+    [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && hyprctl reload >/dev/null 2>&1
+
+    # driftwm
+    local dw="$HOME/.config/driftwm/config.toml"
+    if [[ -f "$dw" ]] && grep -q '^\[keybindings\]' "$dw"; then
+        [[ -f "$dw.nameless-bak" ]] || cp -a "$dw" "$dw.nameless-bak"      # копия — только исходного конфига, повторная установка её не затирает
+        local busy=() added=0
+        while IFS='|' read -r mods key action _ what; do
+            local k; k="$(tr '[:upper:]' '[:lower:]' <<<"$key")"
+            [[ "$mods" != "-" ]] && k="$(tr '[:upper:]' '[:lower:]' <<<"${mods/SUPER/mod}")+$k"
+            local line="\"$k\" = \"exec $act $action\""
+            if grep -q "^\"$k\"[[:space:]]*=" "$dw"; then
+                # встроенное действие driftwm (навигация, масштаб) не заменяется; запуск программы (exec: swaylock, grim, прежний NameLess) — заменяется
+                if grep -q "^\"$k\"[[:space:]]*=[[:space:]]*\"exec " "$dw"; then sed -i "s|^\"$k\"[[:space:]]*=.*|$line|" "$dw"
+                else busy+=("$k ($what)"); fi
+            else
+                sed -i "/^\[keybindings\]/a $line" "$dw"; added=$((added + 1))
+            fi
+        done <<<"$rows"
+        say "driftwm: добавлено клавиш — $added (копия — config.toml.nameless-bak)"
+        (( ${#busy[@]} )) && warn "driftwm: заняты своими действиями, не тронуты — ${busy[*]}"
+    fi
+
+    # справка SUPER+F1
+    if [[ ! -f "$hypr/keybinds.txt" ]]; then
+        {
+            echo "# Справочник клавиш: «раздел|клавиша|действие». Показывается по SUPER+F1 (NameLess UI)"
+            while IFS='|' read -r mods key _ sec what; do
+                local k="$key"; [[ "$key" == period ]] && k="."; [[ "$key" == Escape ]] && k="Esc"
+                [[ "$mods" != "-" ]] && k="${mods//+/ + } + $k"
+                echo "$sec|$k|$what"
+            done <<<"$rows"
+        } > "$hypr/keybinds.txt"
+        say "справка клавиш — ~/.config/hypr/keybinds.txt"
+    fi
+}
+
 # ---------- запуск ----------
 case "${1:-}" in
-    "")          install_shell; install_drivers ;;
-    shell)       install_shell ;;
+    "")          install_shell; install_keys; install_drivers ;;
+    shell)       install_shell; install_keys ;;
+    keys)        install_keys ;;
     orbit)       install_orbit ;;
-    all)         install_shell; install_orbit; install_drivers ;;
-    --deps)      install_deps; install_shell; install_drivers ;;
+    all)         install_shell; install_keys; install_orbit; install_drivers ;;
+    --deps)      install_deps; install_shell; install_keys; install_drivers ;;
     drivers)     install_drivers force ;;
     --restore)   restore; exit 0 ;;
     -h|--help)   sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *)           warn "не знаю команды «$1». Доступно: orbit, shell, all, drivers, --deps, --restore, --help"; exit 2 ;;
+    *)           warn "не знаю команды «$1». Доступно: orbit, shell, keys, all, drivers, --deps, --restore, --help"; exit 2 ;;
 esac
 
 echo

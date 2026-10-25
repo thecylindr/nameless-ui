@@ -46,9 +46,11 @@ Scope {
     })
     readonly property var links: linksAll.filter(function (l) { return !virtualSides[l.side]; })
     readonly property var screens: Quickshell.screens.filter(function (s) { return String(s.name).indexOf("HEADLESS") !== 0; })
-    // экран по имени среди настоящих: на виртуальном мониторе второго экрана эффект не рисуется — окно на нём роняло Quickshell при удалении монитора
+    // экран для эффекта по имени: настоящие и открытый виртуальный монитор второго экрана (Compositor.screens). Раньше на виртуальном
+    // эффект не рисовался — окно на нём роняло Quickshell при удалении монитора; теперь Orbit заранее шлёт «closing», и монитор
+    // пропадает из списка до удаления. Без этого на устройстве-втором экране эффекта перехода не было видно (он в его картинке)
     function screenByName(n) {
-        var all = screens;
+        var all = Compositor.screens;
         for (var i = 0; i < all.length; i++) if (all[i].name === n) return all[i];
         return null;
     }
@@ -228,7 +230,7 @@ Scope {
     }
     // c — положение курсора на общей раскладке (логические пиксели) или null
     function monCross(from, to, c) {
-        // геометрия — по всем мониторам (и виртуальному), рисуется — только на настоящих
+        // геометрия — по всем мониторам; рисуется — на настоящих и на открытом виртуальном (screenByName)
         function geo(n) { var all = Quickshell.screens; for (var i = 0; i < all.length; i++) if (all[i].name === n) return all[i]; return null; }
         var a = geo(from), b = geo(to);
         if (!a || !b) return;

@@ -235,7 +235,7 @@ PanelWindow {
                     visible: w.missing
                     anchors.horizontalCenter: parent.horizontalCenter
                     ui: Theme; height: 34; icon: "󰇚"; label: Tr.t("Установить cliphist и wl-clipboard"); on: true
-                    onClicked: Quickshell.execDetached(["kitty", "--class", "glassrice-pkg", "-e", "sh", "-c", "sudo pacman -S --needed cliphist wl-clipboard; echo; read -r -n1 -p 'Готово. Нажмите любую клавишу…'"])
+                    onClicked: if (w.shell) w.shell.installPkgs(["cliphist", "wl-clipboard"], "clipboard")       // терминал поверх, окно вернётся само
                 }
             }
         }

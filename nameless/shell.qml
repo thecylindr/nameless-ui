@@ -91,6 +91,31 @@ ShellRoot {
     function openOrbit() { if (!OrbitData.enabled) return; closePanels(); OrbitData.panelOpen = true; }
     function openAgents() { closePanels(); agentsOpen = true; }
     function openFeatures() { closePanels(); featuresOpen = true; }
+    // установка пакетов из окон NameLess («Функции», буфер обмена): окна — слои поверх всего, терминал с паролем sudo открывался
+    // под ними. Как в «Программах»: окно прячется, терминал — плавающий по центру (правило glassrice-pkg), после установки
+    // окно возвращается само и перепроверяет пакеты. Запуск здесь, а не в окне: закрытое окно выгружается вместе со своими процессами
+    property string pkgReturn: ""            // какое окно вернуть: features | clipboard
+    signal pkgsInstalled()
+    Process {
+        id: pkgTerm
+        onExited: {
+            if (root.pkgReturn === "features") root.openFeatures();
+            else if (root.pkgReturn === "clipboard") { root.closePanels(); root.clipboardOpen = true; }
+            root.pkgReturn = "";
+            root.pkgsInstalled();
+        }
+    }
+    readonly property bool pkgBusy: pkgTerm.running
+    function installPkgs(pkgs, from) {
+        if (pkgTerm.running || !pkgs || pkgs.length === 0) return;
+        var list = pkgs.join(" ");
+        pkgTerm.command = ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Установка: ") + list, "sh", "-c",
+            "echo '==> " + Tr.t("Устанавливаю: ") + list + "'; if command -v yay >/dev/null; then yay -S --needed $0 $@; else sudo pacman -S --needed $0 $@; fi; " +
+            "echo; read -r -n1 -p '" + Tr.t("Готово. Нажмите любую клавишу…") + "'"].concat(pkgs);
+        pkgReturn = from || "";
+        featuresOpen = false; clipboardOpen = false; closePanels();
+        pkgTerm.running = true;
+    }
     function openProfiles() { closePanels(); profilesOpen = true; }
     function toggleClipboard() { if (clipboardOpen) clipboardOpen = false; else { closePanels(); clipboardOpen = true; } }
     // установка управления процессором: окна NameLess уходят, чтобы терминал с паролем был сверху

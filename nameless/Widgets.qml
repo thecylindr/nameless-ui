@@ -37,10 +37,14 @@ PanelWindow {
     property string sel: ""          // выбранный в режиме правки: двигается стрелками
     property real guideX: -1         // направляющие во время перетаскивания
     property real guideY: -1
-    readonly property int snapDist: 10
+    // привязка мягкая: прилипает только совсем рядом (6 px) к краям и центрам соседей и экрана; вне линий — где отпустили, без сетки 8 px.
+    // С зажатым Shift — без привязки вовсе
+    readonly property int snapDist: 6
+    property bool noSnap: false
     function slots() { var out = []; for (var i = 0; i < rep.count; i++) { var s = rep.itemAt(i); if (s && s.shown) out.push(s); } return out; }
     // ближайшая к x линия привязки: края и центры соседей, поля экрана
     function snapTo(slot, x, y) {
+        if (noSnap) return { x: Math.max(8, Math.min(w.width - slot.width - 8, x)), y: Math.max(8, Math.min(w.height - slot.height - 8, y)), gx: -1, gy: -1 };
         var xs = [16, w.width - slot.width - 16, (w.width - slot.width) / 2], ys = [top0, w.height - slot.height - 16];
         var gx = [16, w.width - 16, w.width / 2], gy = [top0, w.height - 16];
         var others = slots().filter(function (o) { return o !== slot; });
@@ -54,8 +58,6 @@ PanelWindow {
         var r = { x: x, y: y, gx: -1, gy: -1 }, bx = snapDist + 1, by = snapDist + 1;
         for (var a = 0; a < xs.length; a++) { var d = Math.abs(xs[a] - x); if (d < bx) { bx = d; r.x = xs[a]; r.gx = gx[a]; } }
         for (var b = 0; b < ys.length; b++) { var e = Math.abs(ys[b] - y); if (e < by) { by = e; r.y = ys[b]; r.gy = gy[b]; } }
-        if (r.gx < 0) r.x = Math.round(x / grid) * grid;
-        if (r.gy < 0) r.y = Math.round(y / grid) * grid;
         r.x = Math.max(8, Math.min(w.width - slot.width - 8, r.x));
         r.y = Math.max(8, Math.min(w.height - slot.height - 8, r.y));
         return r;
@@ -352,22 +354,18 @@ PanelWindow {
         }
         return out;
     }
-    readonly property int grid: 8
 
     // ---------- фон режима правки и меню стола ----------
     Rectangle { anchors.fill: parent; color: "black"; opacity: w.edit ? 0.35 : 0; Behavior on opacity { NumberAnimation { duration: 200 } } }
     // сетка привязки
     Canvas {
         anchors.fill: parent
-        visible: w.edit && !w.gridMode && !w.autoMode
+        visible: w.edit && w.grid2              // в свободном режиме сетки нет — точки только у «Сетки»
         onVisibleChanged: if (visible) requestPaint()
-        readonly property bool g2: w.grid2
-        onG2Changed: requestPaint()
         onPaint: {
             var ctx = getContext("2d"); ctx.reset();
-            var st = w.grid2 ? w.pitch : w.grid * 4, x0 = w.grid2 ? 16 : 0, y0 = w.grid2 ? w.top0 : 0;
-            ctx.fillStyle = Qt.rgba(1, 1, 1, w.grid2 ? 0.22 : 0.08);
-            for (var x = x0; x < width; x += st) for (var y = y0; y < height; y += st) ctx.fillRect(x - 1, y - 1, w.grid2 ? 3 : 1.5, w.grid2 ? 3 : 1.5);
+            ctx.fillStyle = Qt.rgba(1, 1, 1, 0.22);
+            for (var x = 16; x < width; x += w.pitch) for (var y = w.top0; y < height; y += w.pitch) ctx.fillRect(x - 1, y - 1, 3, 3);
         }
     }
     MouseArea {
@@ -449,6 +447,7 @@ PanelWindow {
                 : w.snapTo(slot, sx + drag.activeTranslation.x, sy + drag.activeTranslation.y)))
             onSnappedChanged: if (snapped) {
                 w.guideX = snapped.gx; w.guideY = snapped.gy;
+                w.noSnap = (drag.centroid.modifiers & Qt.ShiftModifier) !== 0;
                 if (w.gridMode || w.autoMode) { var cp = drag.centroid.scenePosition; w.previewDrop(slot, cp.x, cp.y); }
                 if (w.freeMode) { var gp = w.nearestFree(snapped.x, snapped.y, width, height, w.othersRects(slot)); w.ghost = { x: gp.x, y: gp.y, w: width, h: height }; }
             }

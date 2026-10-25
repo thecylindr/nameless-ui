@@ -41,8 +41,11 @@
 
 ```bash
 git clone https://github.com/thecylindr/nameless-ui.git && cd nameless-ui
-./install.sh                 # copies nameless and ThemeDrawer to ~/.config/quickshell (old ones go to a backup)
+./install.sh                 # copies nameless and ThemeDrawer to ~/.config/quickshell (old ones go to a backup) and sets up the keys
+./install.sh keys            # keys only (after an update)
 ```
+
+NameLess UI keys (SUPER+R, SUPER+Z, SUPER+X, SUPER+SHIFT+V… — listed in `hypr/nameless-keys.txt`) are installed automatically: for Hyprland as `~/.config/hypr/nameless-binds.lua` (or `.conf`) included at the end of your config, replacing any previous binding of the same combo; for driftwm in `[keybindings]`, except combos bound to driftwm's own actions. Config backups are `*.nameless-bak`.
 
 **Manually:**
 
@@ -58,7 +61,7 @@ qs -c ThemeDrawer &          # the appearance drawer
 ```bash
 ./install.sh --deps      # the minimum packages from minimal.txt (≈ 22) + the shell
 ```
-Or just copy the files: `./install.sh`. Optional extras (screen recording, smooth wallpaper changes, GIF, btop) are in `minimal-optional.txt` and installed only if you want them. Drivers, apps, the login screen and your Hyprland configs are not touched.
+Or just copy the files: `./install.sh`. Optional extras (screen recording, smooth wallpaper changes, GIF, btop) are in `minimal-optional.txt` and installed only if you want them. Drivers, apps and the login screen are not touched; only NameLess UI keys are added to your Hyprland and driftwm configs (backed up as *.nameless-bak).
 
 **Requires:** `quickshell`, Hyprland (or driftwm), PipeWire, a Nerd Font (icons). For specific parts: `cliphist` and `wl-clipboard` (clipboard), `gpu-screen-recorder` or `wf-recorder`, `slurp` and `ffmpeg` (recording), `hyprpicker` (color picker), `playerctl`, `NetworkManager`, `awww` (smooth wallpaper changes).
 

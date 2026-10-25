@@ -66,8 +66,9 @@ PanelWindow {
         stdout: StdioCollector {
             onStreamFinished: {
                 w.script = text.trim();
-                if (w.script === "") w.note = Tr.t("Не найдена сборка: укажите путь к glassrice в ~/.config/glassrice/rice");
-                else { w.reload(); w.loadTab(); }
+                if (w.script === "") w.note = Tr.t("Пакеты недоступны: нет pkg.sh — поставьте NameLess UI полностью (install.sh) или укажите папку в ~/.config/glassrice/rice");
+                else w.reload();
+                w.loadTab();
             }
         }
     }
@@ -163,14 +164,17 @@ PanelWindow {
     property bool updatesLoading: false
     property var patches: []
     property var sys: ({ orphans: 0, cache: "…", journal: "…" })
+    // вкладки пакетов работают через pkg.sh сборки; иконки, подсветка и драйверы — через свои скрипты и без неё
+    // (раньше без pkg.sh, то есть на компьютере только с NameLess UI, не открывалась ни одна вкладка)
     function loadTab() {
-        if (script === "") return;
-        if (ptab === 1 && !updProc.running) { updatesLoading = true; updProc.running = true; }
-        if (ptab === 2 && !patchProc.running) patchProc.running = true;
-        if (ptab === 3 && !compProc.running) compProc.running = true;
-        if (ptab === 4 && !devProc.running) devProc.running = true;
+        if (script !== "") {
+            if (ptab === 1 && !updProc.running) { updatesLoading = true; updProc.running = true; }
+            if (ptab === 2 && !patchProc.running) patchProc.running = true;
+            if (ptab === 3 && !compProc.running) compProc.running = true;
+            if (ptab === 4 && !devProc.running) devProc.running = true;
+            if (ptab === 6) { if (!sysProc.running) sysProc.running = true; if (!orphProc.running) orphProc.running = true; }
+        }
         if (ptab === 5 && !rgbProc.running && rgbScript !== "") rgbProc.running = true;
-        if (ptab === 6) { if (!sysProc.running) sysProc.running = true; if (!orphProc.running) orphProc.running = true; }
         if (ptab === 7 && !iconsProc.running) { if (iconsScript === "") iconNote = missingNote; else iconsProc.running = true; }
         if ((ptab === 8 || (w.drv.gpus || []).length === 0) && !drvProc.running && driverScript !== "") drvProc.running = true;     // число недостающих — на вкладке сразу
     }
@@ -201,7 +205,7 @@ PanelWindow {
             }
         }
     }
-    readonly property string missingNote: Tr.t("Нет скрипта сборки — обновите glassrice (git pull) или запустите install.sh")
+    readonly property string missingNote: Tr.t("Нет системного скрипта NameLess UI — обновите NameLess UI (git pull) и запустите ./install.sh")
     readonly property string rgbScript: scripts.rgb || ""
     // вкладка «Подсветка» — только если подсвечивать есть что (rgb.sh probe: клавиатура, устройства OpenRGB, USB-контроллеры подсветки).
     // OpenRGB стоит, но ещё ни разу не искал устройства — поиск один раз в фоне: подсветку памяти и платы иначе не увидеть
@@ -1120,12 +1124,12 @@ PanelWindow {
                     GButton {
                         ui: Theme; icon: "󰇚"; on: true; label: Tr.t("Установить всё (терминал)")
                         enabled: w.busy === ""
-                        onClicked: w.runTerm(Tr.t("драйверы"), ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Драйверы"), "sh", "-c", "\"$0\"; echo; read -rp 'Готово. Enter — закрыть ' _", w.driverScript])
+                        onClicked: w.runTerm(Tr.t("драйверы"), ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Драйверы"), "sh", "-c", "bash \"$0\"; echo; read -rp 'Готово. Enter — закрыть ' _", w.driverScript])
                     }
                     GButton {
                         ui: Theme; icon: "󰒓"; label: Tr.t("Диагностика")
                         enabled: w.busy === ""
-                        onClicked: w.runTerm(Tr.t("диагностика драйверов"), ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Драйверы — диагностика"), "sh", "-c", "\"$0\" --check; echo; read -rp 'Enter — закрыть ' _", w.driverScript])
+                        onClicked: w.runTerm(Tr.t("диагностика драйверов"), ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Драйверы — диагностика"), "sh", "-c", "bash \"$0\" --check; echo; read -rp 'Enter — закрыть ' _", w.driverScript])
                     }
                     GButton { ui: Theme; icon: "󰑐"; label: Tr.t("Обновить"); onClicked: { drvProc.running = false; drvProc.running = true; } }
                 }
@@ -1230,7 +1234,7 @@ PanelWindow {
                         ui: Theme; icon: "󰇚"; on: true
                         label: (rgbCol.r.drivers || []).some(function (d) { return !d.installed; }) || !rgbCol.r.rule ? Tr.t("Поставить драйверы и права") : Tr.t("Переустановить права")
                         enabled: w.busy === ""
-                        onClicked: w.runTerm(Tr.t("установка драйверов подсветки"), ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Подсветка — драйверы"), w.rgbScript, "install"])
+                        onClicked: w.runTerm(Tr.t("установка драйверов подсветки"), ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Подсветка — драйверы"), "bash", w.rgbScript, "install"])
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
