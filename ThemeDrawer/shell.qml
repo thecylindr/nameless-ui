@@ -778,9 +778,9 @@ ShellRoot {
                 Text { text: Tr.t("Шаблоны"); color: look.sub; font.family: look.font; font.pixelSize: 12; font.weight: Font.DemiBold; font.capitalization: Font.AllUppercase; font.letterSpacing: 0.8; leftPadding: 4 }
                 Grid {
                     id: tplGrid
-                    // колонки — по ширине (карточка не уже 300): кнопки справа занимают ~70 px, и при двух колонках в узкой шторке
-                    // название съедалось до «…»
-                    readonly property int cols: Math.max(1, Math.min(6, Math.floor((width + spacing) / (300 + spacing))))
+                    // «Карточек в ряд» — как выбрано; меньше, только если карточка вышла бы уже 190 (тогда превью нечитаемо).
+                    // Раньше предел был 340, и в широкой шторке выбор «3» всё равно давал 2
+                    readonly property int cols: Math.max(1, Math.min(root.view.cols || 2, 6, Math.floor((themesLeft.width + spacing) / (190 + spacing))))
                     columns: cols
                     spacing: 10
                     Repeater {
@@ -883,9 +883,8 @@ ShellRoot {
                 Grid {
                     id: mine
                     width: parent.width
-                    // колонки — по ширине (карточка не уже 300): кнопки справа занимают ~70 px, и при двух колонках в узкой шторке
-                    // название съедалось до «…»
-                    readonly property int cols: Math.max(1, Math.min(6, Math.floor((width + spacing) / (300 + spacing))))
+                    // «Карточек в ряд», но карточка не уже 300: кнопки справа занимают ~70 px, и в узкой шторке название съедалось до «…»
+                    readonly property int cols: Math.max(1, Math.min(root.view.cols || 2, 6, Math.floor((width + spacing) / (230 + spacing))))
                     columns: cols
                     spacing: 8
                     readonly property real cw: (width - spacing * (cols - 1)) / cols

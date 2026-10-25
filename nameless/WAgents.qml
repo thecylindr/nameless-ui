@@ -114,7 +114,8 @@ WCard {
                     Text { anchors.right: parent.right; text: Math.round(modelData.u.util) + " %"; color: AgentsData.level(modelData.u.util); font.family: Theme.font; font.pixelSize: 12; font.weight: Font.Bold }
                     Rectangle { y: 16; width: parent.width; height: 5; radius: 2.5; color: Theme.fill(0.14)
                         Rectangle { width: parent.width * Math.min(1, modelData.u.util / 100); height: parent.height; radius: 2.5; color: AgentsData.level(modelData.u.util) } }
-                    Text { y: 24; text: Tr.t("сброс через ") + AgentsData.left(modelData.u.resets); color: Theme.sub; font.family: Theme.font; font.pixelSize: 9 }
+                    // в ширину половины: «сброс через 4 ч 50 мин» соседних колонок наезжали друг на друга
+                    Text { y: 24; width: parent.width; elide: Text.ElideRight; text: "󰑐 " + AgentsData.left(modelData.u.resets); color: Theme.sub; font.family: Theme.iconFont; font.pixelSize: 9 }
                 }
             }
         }

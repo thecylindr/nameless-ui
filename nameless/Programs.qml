@@ -169,10 +169,10 @@ PanelWindow {
         if (ptab === 2 && !patchProc.running) patchProc.running = true;
         if (ptab === 3 && !compProc.running) compProc.running = true;
         if (ptab === 4 && !devProc.running) devProc.running = true;
-        if (ptab === 5 && !rgbProc.running) rgbProc.running = true;
+        if (ptab === 5 && !rgbProc.running && rgbScript !== "") rgbProc.running = true;
         if (ptab === 6) { if (!sysProc.running) sysProc.running = true; if (!orphProc.running) orphProc.running = true; }
-        if (ptab === 7 && !iconsProc.running) iconsProc.running = true;
-        if ((ptab === 8 || (w.drv.gpus || []).length === 0) && !drvProc.running) drvProc.running = true;     // число недостающих — на вкладке сразу
+        if (ptab === 7 && !iconsProc.running) { if (iconsScript === "") iconNote = missingNote; else iconsProc.running = true; }
+        if ((ptab === 8 || (w.drv.gpus || []).length === 0) && !drvProc.running && driverScript !== "") drvProc.running = true;     // число недостающих — на вкладке сразу
     }
     // компьютер, устройства, подсветка, зависимости
     property var comp: ({})
@@ -182,11 +182,46 @@ PanelWindow {
     property var orphPick: []
     property int rgbBright: 100
     property string rgbNote: ""
-    readonly property string rgbScript: script.replace(/scripts\/apps\/pkg\.sh$/, "scripts/system/rgb.sh")
+    // системные скрипты ищутся по отдельности: в старой сборке (~/.config/glassrice/rice) их могло не быть — icons.sh падал с кодом 127.
+    // Порядок: сборка, копия установщика (~/.local/share/nameless), типовые места клона; не нашёлся — пусто, окно говорит, что обновить
+    property var scripts: ({})
+    Process {
+        id: sysLocate
+        running: true
+        command: ["sh", "-c", "r=$(cat \"$HOME/.config/glassrice/rice\" 2>/dev/null); for n in icons rgb driver; do " +
+                  "for d in \"$r\" \"$HOME/.local/share/nameless\" \"$HOME/newdesign/glassrice\" \"$HOME/glassrice\"; do " +
+                  "[ -n \"$d\" ] && [ -f \"$d/scripts/system/$n.sh\" ] && { echo \"$n=$d/scripts/system/$n.sh\"; break; }; done; done"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                var m = {};
+                text.trim().split("\n").forEach(function (l) { var i = l.indexOf("="); if (i > 0) m[l.slice(0, i)] = l.slice(i + 1); });
+                w.scripts = m;
+                if (w.rgbScript !== "") rgbProbe.running = true;
+                if (w.ptab === 7 && w.iconsScript !== "") { iconsProc.running = false; iconsProc.running = true; }
+            }
+        }
+    }
+    readonly property string missingNote: Tr.t("Нет скрипта сборки — обновите glassrice (git pull) или запустите install.sh")
+    readonly property string rgbScript: scripts.rgb || ""
+    // вкладка «Подсветка» — только если подсвечивать есть что (rgb.sh probe: клавиатура, устройства OpenRGB, USB-контроллеры подсветки).
+    // OpenRGB стоит, но ещё ни разу не искал устройства — поиск один раз в фоне: подсветку памяти и платы иначе не увидеть
+    property var rgbInfo: null
+    readonly property bool rgbSupported: rgbInfo !== null && rgbInfo.supported === true
+    Process {
+        id: rgbProbe
+        command: ["bash", w.rgbScript, "probe"]
+        stdout: StdioCollector {
+            onStreamFinished: {
+                try { w.rgbInfo = JSON.parse(text); } catch (e) { return; }
+                if (!w.rgbInfo.supported && w.rgbInfo.hasOpenrgb && !w.rgbInfo.scanned && !rgbProc.running) rgbProc.running = true;
+                if (!w.rgbSupported && w.ptab === 5) w.ptab = 0;
+            }
+        }
+    }
     function gib(kib) { return ((kib || 0) / 1048576).toFixed(1); }
     function gb(b) { return ((b || 0) / 1073741824).toFixed(0); }
     // ---------- иконки: темы и свои значки приложений (icons.sh) ----------
-    readonly property string iconsScript: script.replace(/scripts\/apps\/pkg\.sh$/, "scripts/system/icons.sh")
+    readonly property string iconsScript: scripts.icons || ""
     property var icons: ({ current: "", installed: [], catalog: [] })
     property var iconHits: []
     property string iconFor: ""            // значок приложения, которому выбирается замена (пусто — просто поиск)
@@ -231,6 +266,7 @@ PanelWindow {
     }
     function loadStore(q, more) {
         storeQuery = q; storePage = more ? storePage + 1 : 0; storeLoading = true;
+        if (iconsScript === "") { storeLoading = false; iconNote = missingNote; return; }
         storeProc.running = false; storeProc.command = ["bash", iconsScript, "store", String(storePage), q]; storeProc.running = true;
     }
     Process {
@@ -250,18 +286,20 @@ PanelWindow {
     }
 
     // ---------- драйверы видеокарты и процессора (driver.sh --status) ----------
-    readonly property string driverScript: script.replace(/scripts\/apps\/pkg\.sh$/, "scripts/system/driver.sh")
+    readonly property string driverScript: scripts.driver || ""
     property var drv: ({ gpus: [], cpu: {}, missing: 0 })
-    Process { id: drvProc; command: [w.driverScript, "--status"]; stdout: StdioCollector { onStreamFinished: { try { w.drv = JSON.parse(text); } catch (e) { } } } }
+    Process { id: drvProc; command: ["bash", w.driverScript, "--status"]; stdout: StdioCollector { onStreamFinished: { try { w.drv = JSON.parse(text); } catch (e) { } } } }
 
     Process { id: compProc; command: [w.script, "computer"]; stdout: StdioCollector { onStreamFinished: { try { w.comp = JSON.parse(text); } catch (e) { } } } }
     Process { id: devProc; command: [w.script, "devices"]; stdout: StdioCollector { onStreamFinished: { try { w.devs = JSON.parse(text); } catch (e) { } } } }
     Process {
-        id: rgbProc; command: [w.rgbScript, "status"]
+        id: rgbProc; command: ["bash", w.rgbScript, "status"]
         stdout: StdioCollector {
             onStreamFinished: {
                 try {
                     w.rgb = JSON.parse(text);
+                    // поиск OpenRGB мог найти подсветку памяти и платы — вкладка появляется (или пропадает)
+                    if (!rgbProbe.running) rgbProbe.running = true;
                     // яркость и эффект из сохранённого — только при первом чтении: дальше ими управляет окно
                     if (!w.rgbLoaded && w.rgb.saved) {
                         if (w.rgb.saved.brightness !== undefined) w.rgbBright = w.rgb.saved.brightness;
@@ -302,10 +340,11 @@ PanelWindow {
         }
         onExited: if (w.rgbPending) { var c = w.rgbPending; w.rgbPending = null; rgbSet.command = c; rgbSet.running = true; }
     }
-    function rgbRun(cmd) { if (rgbSet.running) rgbPending = cmd; else { rgbSet.command = cmd; rgbSet.running = true; } }
+    // rgb.sh — через bash (бит запуска после копирования сборки мог потеряться)
+    function rgbRun(cmd) { if (cmd[0] === rgbScript) cmd = ["bash"].concat(cmd); if (rgbSet.running) rgbPending = cmd; else { rgbSet.command = cmd; rgbSet.running = true; } }
     function setRgb(hex, pct) {
         // свой цвет выбран вручную — подсветка переходит в автономный режим (иначе следующая смена темы его перезапишет)
-        if (rgbFollow && hex !== rgbColor) { rgbFollow = false; rgbRun(["sh", "-c", "\"$0\" follow off >/dev/null; exec \"$0\" set \"$1\" \"$2\"", rgbScript, hex, String(Math.round(pct))]); rgbColor = hex; rgbBright = Math.round(pct); return; }
+        if (rgbFollow && hex !== rgbColor) { rgbFollow = false; rgbRun(["sh", "-c", "bash \"$0\" follow off >/dev/null; exec bash \"$0\" set \"$1\" \"$2\"", rgbScript, hex, String(Math.round(pct))]); rgbColor = hex; rgbBright = Math.round(pct); return; }
         rgbColor = hex; rgbBright = Math.round(pct);
         if (rgbEffect === "static") rgbRun([rgbScript, "set", hex, String(rgbBright)]);
         else applyEffect();
@@ -503,6 +542,7 @@ PanelWindow {
                             { v: 2, t: Tr.t("Патчи"), icon: "󰒓" }, { v: 3, t: Tr.t("Компьютер"), icon: "󰌢" }, { v: 4, t: Tr.t("Устройства"), icon: "󰾰" },
                             { v: 5, t: Tr.t("Подсветка"), icon: "󰌌" }, { v: 6, t: Tr.t("Система"), icon: "󰋊" },
                             { v: 7, t: Tr.t("Иконки"), icon: "󰀻" }, { v: 8, t: Tr.t("Драйверы"), icon: "󰢮", n: w.drv.missing || 0, warn: true }]
+                           .filter(function (t) { return t.v !== 5 || w.rgbSupported; })
                     Rectangle {
                         id: tab
                         required property var modelData

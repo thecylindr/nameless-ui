@@ -34,7 +34,8 @@ WCard {
 
     Item {
         id: ringBox
-        width: 100; height: 100
+        // кольцо — по ширине карточки: в размере S (240) кольцо 100 и кнопки не помещались
+        width: Math.round(Math.min(100, w.cw * 0.4)); height: width
         anchors.verticalCenter: parent.verticalCenter
         Canvas {
             anchors.fill: parent
@@ -64,7 +65,8 @@ WCard {
         }
     }
     Column {
-        anchors { left: ringBox.right; leftMargin: 16; right: parent.right; verticalCenter: parent.verticalCenter }
+        id: side
+        anchors { left: ringBox.right; leftMargin: 12; right: parent.right; verticalCenter: parent.verticalCenter }
         spacing: 6
         Text { text: Tr.t("󰔛  Помодоро"); color: Theme.sub; font.family: Theme.iconFont; font.pixelSize: 12; font.weight: Font.DemiBold }
         Text { text: w.workMin + " / " + w.restMin + Tr.t(" мин"); color: Theme.text; font.family: Theme.font; font.pixelSize: 14; font.weight: Font.DemiBold }
@@ -74,10 +76,14 @@ WCard {
             Repeater { model: Math.min(8, w.done); Text { text: "󰄯"; color: Theme.red; font.family: Theme.iconFont; font.pixelSize: 12 } }
             Text { visible: w.done === 0; text: Tr.t("этапов пока нет"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
         }
+        // кнопки делят ширину колонки; в узкой — только значки
         Row {
+            id: tb
+            width: side.width
             spacing: 6
-            GButton { ui: Theme; height: 30; implicitWidth: 74; label: w.running ? Tr.t("Пауза") : Tr.t("Старт"); on: !w.running; onClicked: w.running = !w.running }
-            GButton { ui: Theme; height: 30; implicitWidth: 64; label: Tr.t("Сброс"); onClicked: w.reset() }
+            readonly property bool narrow: width < 136
+            GButton { ui: Theme; height: 30; width: (tb.width - 6) / 2; label: tb.narrow ? "" : (w.running ? Tr.t("Пауза") : Tr.t("Старт")); icon: tb.narrow ? (w.running ? "󰏤" : "󰐊") : ""; on: !w.running; onClicked: w.running = !w.running }
+            GButton { ui: Theme; height: 30; width: (tb.width - 6) / 2; label: tb.narrow ? "" : Tr.t("Сброс"); icon: tb.narrow ? "󰑐" : ""; onClicked: w.reset() }
         }
     }
 }

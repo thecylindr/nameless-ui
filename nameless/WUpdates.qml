@@ -11,7 +11,7 @@ WCard {
     property bool checking: false
     property string err: ""
     readonly property int n: repo.length + aur.length
-    implicitHeight: pad * 2 + 30 + (n > 0 ? Math.min(4, n) * 18 + 44 : 22)
+    implicitHeight: pad * 2 + Math.max(30, head.height) + (n > 0 ? Math.min(4, n) * 18 + 44 : 22)
 
     Process {
         id: proc
@@ -35,8 +35,9 @@ WCard {
         Text { text: "󰚰"; color: w.n > 0 ? Theme.accent : Theme.green; font.family: Theme.iconFont; font.pixelSize: 24; anchors.verticalCenter: parent.verticalCenter }
         Column {
             anchors.verticalCenter: parent.verticalCenter
-            Text { text: w.checking ? Tr.t("Проверка…") : (w.err !== "" ? Tr.t("Не проверить") : (w.n > 0 ? Tr.t("Обновлений: ") + w.n : Tr.t("Система свежая"))); color: Theme.text; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold }
-            Text { text: w.err !== "" ? w.err : (w.n > 0 ? Tr.t("репозитории ") + w.repo.length + " · AUR " + w.aur.length : Tr.t("проверка раз в ") + (Config.store.updates.interval || 60) + Tr.t(" мин")); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
+            width: parent.width - 34
+            Text { width: parent.width; elide: Text.ElideRight; text: w.checking ? Tr.t("Проверка…") : (w.err !== "" ? Tr.t("Не проверить") : (w.n > 0 ? Tr.t("Обновлений: ") + w.n : Tr.t("Система свежая"))); color: Theme.text; font.family: Theme.font; font.pixelSize: 15; font.weight: Font.Bold }
+            Text { width: parent.width; wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight; text: w.err !== "" ? w.err : (w.n > 0 ? Tr.t("репозитории ") + w.repo.length + " · AUR " + w.aur.length : Tr.t("проверка раз в ") + (Config.store.updates.interval || 60) + Tr.t(" мин")); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
         }
     }
     Column {

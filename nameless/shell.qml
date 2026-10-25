@@ -93,6 +93,8 @@ ShellRoot {
     function openFeatures() { closePanels(); featuresOpen = true; }
     function openProfiles() { closePanels(); profilesOpen = true; }
     function toggleClipboard() { if (clipboardOpen) clipboardOpen = false; else { closePanels(); clipboardOpen = true; } }
+    // установка управления процессором: окна NameLess уходят, чтобы терминал с паролем был сверху
+    Connections { target: Power; function onInstalling() { root.tasksOpen = false; root.closePanels(); } }
     function toggleTasks() { if (tasksOpen) tasksOpen = false; else openTasks(); }
     function toggleLauncher() {
         controlOpen = false; desktopOpen = false; Notifs.centerOpen = false;
@@ -174,7 +176,7 @@ ShellRoot {
             onStreamFinished: {
                 if (text.trim() !== "open") return;
                 if (drvNote.target === "programs") root.openPrograms(8);
-                else Quickshell.execDetached(["kitty", "--title", Tr.t("Драйверы"), "sh", "-c", "\"$0\"; echo; read -rp 'Enter — закрыть ' _", drvNote.target]);
+                else Quickshell.execDetached(["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Драйверы"), "sh", "-c", "bash \"$0\"; echo; read -rp 'Enter — закрыть ' _", drvNote.target]);
             }
         }
     }
@@ -202,28 +204,30 @@ ShellRoot {
     readonly property bool entriesOn: Config.store.apps === undefined || Config.store.apps.entries !== false
     // скрытые в меню приложений: ярлыки этих окон убираются (Функции → «Окна NameLess в меню приложений»)
     readonly property var entriesHidden: (Config.store.apps || {}).hidden || []
-    readonly property string entriesKey: entriesOn + "|" + entriesHidden.join(",")
+    // язык ярлыков — язык NameLess, а не локаль системы: раньше при английской локали rofi показывал английские названия
+    // у русского интерфейса (Name[en] перекрывал Name)
+    readonly property string entriesKey: entriesOn + "|" + entriesHidden.join(",") + "|" + Tr.lang
     onEntriesKeyChanged: if (Config.ready) { entriesProc.running = false; entriesProc.running = true; }
     Process {
         id: entriesProc
         running: Config.ready
         command: {
-            var on = root.entriesOn, args = [], hidden = root.entriesHidden;
+            var on = root.entriesOn, args = [], hidden = root.entriesHidden, en = Tr.lang === "en";
             root.entries.forEach(function (e) {
                 args.push(e[0] + ".desktop");
-                args.push(on && hidden.indexOf(e[0]) < 0 ? ["[Desktop Entry]", "Type=Application", "Name=" + e[1], "Name[en]=" + e[2], "Comment=" + e[3], "Icon=" + e[4],
+                args.push(on && hidden.indexOf(e[0]) < 0 ? ["[Desktop Entry]", "Type=Application", "Name=" + (en ? e[2] : e[1]), "Comment=" + Tr.t(e[3]), "Icon=" + e[4],
                                 "Exec=qs -c nameless ipc call " + e[5], "Categories=" + e[6], "Keywords=" + e[7], "StartupNotify=false", ""].join("\n") : "");
             });
             // шторка «Оформление» — отдельный конфиг Quickshell
             args.push("nameless-themedrawer.desktop");
-            args.push(on && hidden.indexOf("nameless-themedrawer") < 0 ? ["[Desktop Entry]", "Type=Application", "Name=Оформление", "Name[en]=Appearance", "Comment=Темы, цвета, курсор, обои", "Icon=preferences-desktop-theme",
+            args.push(on && hidden.indexOf("nameless-themedrawer") < 0 ? ["[Desktop Entry]", "Type=Application", "Name=" + (en ? "Appearance" : "Оформление"), "Comment=" + Tr.t("Темы, цвета, курсор, обои"), "Icon=preferences-desktop-theme",
                             "Exec=qs -c ThemeDrawer ipc call drawer toggle", "Categories=Settings;DesktopSettings;", "Keywords=тема;оформление;цвет;theme;appearance;", "StartupNotify=false", ""].join("\n") : "");
             return ["sh", "-c", "d=\"${XDG_DATA_HOME:-$HOME/.local/share}/applications\"; mkdir -p \"$d\"; while [ $# -gt 1 ]; do f=\"$d/$1\"; " +
                     "if [ -z \"$2\" ]; then rm -f \"$f\"; elif [ \"$(cat \"$f\" 2>/dev/null)\" != \"$(printf '%s' \"$2\")\" ]; then printf '%s' \"$2\" > \"$f\"; fi; shift 2; done", "sh"].concat(args);
         }
     }
 
-    // ---------- всегда загруженное ----------    // ---------- всегда загруженное ----------
+    // ---------- всегда загруженное ----------
     Sky {}
     Bar { shell: root }
     NotifPopups {}
@@ -252,10 +256,10 @@ ShellRoot {
         target: "control"
         function toggle(): void { root.toggleControl(); }
     }
-    // пример сигнала: qs -c nameless ipc call signal test bad
+    // пример сигнала: qs -c nameless ipc call signal test good|bad|manual
     IpcHandler {
         target: "signal"
-        function test(kind: string): void { fxSignal.preview(kind === "bad"); }
+        function test(kind: string): void { fxSignal.preview(kind); }
     }
     IpcHandler {
         target: "desktop"

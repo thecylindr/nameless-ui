@@ -24,7 +24,8 @@ Singleton {
 
     Process {
         running: true
-        command: ["sh", "-c", "cat \"$HOME/.config/glassrice/rice\" 2>/dev/null"]
+        // папка, где скрипт действительно есть: сборка (~/.config/glassrice/rice) могла быть старой, без него — тогда копия установщика
+        command: ["sh", "-c", "r=$(cat \"$HOME/.config/glassrice/rice\" 2>/dev/null); for d in \"$r\" \"$HOME/.local/share/nameless\" \"$HOME/newdesign/glassrice\" \"$HOME/glassrice\"; do [ -n \"$d\" ] && [ -f \"$d/scripts/system/power.sh\" ] && { echo \"$d\"; exit; }; done"]
         stdout: StdioCollector { onStreamFinished: { pw.rice = text.trim(); pw.refresh(); } }
     }
     Process {
@@ -50,7 +51,19 @@ Singleton {
         st = Object.assign({}, st, { mode: m });
     }
     function toggle(m) { setMode(mode === m ? "balanced" : m); }
-    function installCpu() { if (rice !== "") Quickshell.execDetached(["kitty", "--title", Tr.t("Управление процессором"), script, "install"]); }
+    // установка в терминале: пароль sudo вводится там — терминал плавающий и по центру (правило glassrice-pkg), окна NameLess
+    // перед ним закрываются (раньше диспетчер задач оставался поверх и закрывал запрос пароля); по окончании состояние перечитывается
+    signal installing()
+    Process {
+        id: instProc
+        onExited: { pw.refresh(); Gpu.refresh(); }
+    }
+    function installCpu() {
+        if (script === "" || instProc.running) return;
+        installing();
+        instProc.command = ["kitty", "--class", "glassrice-pkg", "--title", Tr.t("Управление процессором"), "bash", script, "install"];
+        instProc.running = true;
+    }
 
     // ---------- журнал батареи (аналитика режимов в диспетчере задач, вкладка «Батарея») ----------
     // раз в минуту: время, заряд, мощность (Вт), режим, на зарядке ли; файл обрезается до последних 30 000 записей

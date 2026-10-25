@@ -34,7 +34,8 @@ WCard {
                 required property var modelData
                 width: (nums.width - 12) / 3
                 Text { text: modelData.l; color: Theme.sub; font.family: Theme.font; font.pixelSize: 10 }
-                Text { text: AgentsData.tok(modelData.v); color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Light }
+                // число ужимается по ширине колонки: в размере S «5,2 млн» трёх колонок слипались
+                Text { width: parent.width; text: AgentsData.tok(modelData.v); color: Theme.text; font.family: Theme.font; font.pixelSize: 17; font.weight: Font.Light; fontSizeMode: Text.HorizontalFit; minimumPixelSize: 10 }
             }
         }
     }

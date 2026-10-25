@@ -106,13 +106,17 @@ WCard {
                 }
             }
         }
+        // кнопки делят ширину карточки: фиксированные ширины (318 px) не помещались в виджет 300 и вылезали за край
         Row {
+            id: btns
             topPadding: 8
+            width: parent.width
             spacing: 6
-            GButton { ui: Theme; height: 30; implicitWidth: 92; label: Tr.t("Лента"); icon: "󰏌"; on: true; onClicked: OrbitData.panelOpen = true }
-            GButton { ui: Theme; height: 30; implicitWidth: 84; label: "Orbit"; onClicked: OrbitData.show() }
-            GButton { ui: Theme; height: 30; implicitWidth: 84; label: OrbitData.discovery ? Tr.t("Стоп") : Tr.t("Искать"); onClicked: OrbitData.discovery ? OrbitData.setDiscovery(false) : OrbitData.setDiscovery(true) }
-            GButton { ui: Theme; height: 30; implicitWidth: 40; label: ""; icon: "󰑐"; onClicked: OrbitData.scan() }
+            readonly property real bw: (width - 34 - spacing * 3) / 3
+            GButton { ui: Theme; height: 30; width: btns.bw; label: Tr.t("Лента"); icon: btns.bw >= 78 ? "󰏌" : ""; on: true; onClicked: OrbitData.panelOpen = true }
+            GButton { ui: Theme; height: 30; width: btns.bw; label: "Orbit"; onClicked: OrbitData.show() }
+            GButton { ui: Theme; height: 30; width: btns.bw; label: OrbitData.discovery ? Tr.t("Стоп") : Tr.t("Искать"); onClicked: OrbitData.discovery ? OrbitData.setDiscovery(false) : OrbitData.setDiscovery(true) }
+            GButton { ui: Theme; height: 30; width: 34; label: ""; icon: "󰑐"; onClicked: OrbitData.scan() }
         }
     }
     MouseArea { visible: !w.up; anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: { if (w.off) OrbitData.setEnabled(true); else if (OrbitData.launchFix === "window") OrbitData.launch(); else OrbitData.start(OrbitData.launchFix === "restart"); } }

@@ -116,7 +116,9 @@ Singleton {
     }
 
     function connectTo(id) { call("Connect", "s", id); }
-    function disconnectFrom(id) { call("Disconnect", "s", id); }
+    // когда устройство отключили кнопкой: сигнал «отключён» (жёлтый), а не «связь разорвана» (FxSignal)
+    property var manualOff: ({})
+    function disconnectFrom(id) { var m = Object.assign({}, manualOff); m[id] = Date.now(); manualOff = m; call("Disconnect", "s", id); }
     function mediaCommand(id, action) { call("MediaCommand", "ss", [id, action]); }      // плеер устройства: playpause | next | previous
     function ring(id) { call("Ring", "s", id); }
     function sendClipboard(id) { call("SendClipboard", "s", id); }

@@ -33,7 +33,7 @@ Singleton {
         if ((pr.brightness || 0) > 0) Sys.setBrightness(pr.brightness);
         // подсветка: выкл — погасить, вкл — вернуть сохранённый цвет
         if (pr.rgb === "off" || pr.rgb === "on")
-            Quickshell.execDetached(["sh", "-c", "rice=\"$(cat \"$HOME/.config/glassrice/rice\" 2>/dev/null)\"; [ -x \"$rice/scripts/system/rgb.sh\" ] && \"$rice/scripts/system/rgb.sh\" " + (pr.rgb === "off" ? "off" : "restore")]);
+            Quickshell.execDetached(["sh", "-c", "for d in \"$(cat \"$HOME/.config/glassrice/rice\" 2>/dev/null)\" \"$HOME/.local/share/nameless\"; do [ -n \"$d\" ] && [ -f \"$d/scripts/system/rgb.sh\" ] && exec bash \"$d/scripts/system/rgb.sh\" " + (pr.rgb === "off" ? "off" : "restore") + "; done"]);
         Quickshell.execDetached(["notify-send", "-a", Tr.t("Профили"), Tr.t("Профиль «") + pr.name + "»", summary(pr)]);
     }
     function next() { var i = 0; for (var k = 0; k < list.length; k++) if (list[k].id === active) i = k; apply(list[(i + 1) % list.length].id); }

@@ -15,7 +15,8 @@ Singleton {
 
     Process {
         running: true
-        command: ["sh", "-c", "cat \"$HOME/.config/glassrice/rice\" 2>/dev/null"]
+        // папка, где скрипт действительно есть: сборка (~/.config/glassrice/rice) могла быть старой, без него — тогда копия установщика
+        command: ["sh", "-c", "r=$(cat \"$HOME/.config/glassrice/rice\" 2>/dev/null); for d in \"$r\" \"$HOME/.local/share/nameless\" \"$HOME/newdesign/glassrice\" \"$HOME/glassrice\"; do [ -n \"$d\" ] && [ -f \"$d/scripts/system/gpu.sh\" ] && { echo \"$d\"; exit; }; done"]
         stdout: StdioCollector { onStreamFinished: { g.rice = text.trim(); g.refresh(); } }
     }
     property var after: null              // что сделать, когда придёт свежее состояние

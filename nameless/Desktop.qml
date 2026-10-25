@@ -412,6 +412,18 @@ PanelWindow {
                                 PillSlider { ui: Theme; width: parent.width; icon: "󰩨"; label: Tr.t("Масштаб"); from: 1; to: 6; stepSize: 1; decimals: 0; value: Config.store.gif.scale || 1; suffix: "×"; onCommitted: (v) => Config.set("gif.scale", v) }
                                 PillSlider { ui: Theme; width: parent.width; icon: "󰔟"; label: Tr.t("Смена (папка) раз в"); from: 5; to: 300; stepSize: 5; decimals: 0; value: Config.store.gif.interval || 30; suffix: Tr.t(" с"); onCommitted: (v) => Config.set("gif.interval", v) }
                             }
+                            // ёлочка: гирлянда, цвета, скорость, снег и подарки
+                            Column {
+                                id: treeOpts
+                                visible: opts.t === "tree"
+                                width: parent.width; spacing: 10
+                                readonly property var o: Config.store.tree || ({})
+                                Labeled { label: Tr.t("Гирлянда"); GSegment { ui: Theme; options: [{ v: "chase", t: Tr.t("Бегущие огни") }, { v: "twinkle", t: Tr.t("Мерцание") }, { v: "wave", t: Tr.t("Волна") }]; value: treeOpts.o.garland || "chase"; onPicked: (v) => Config.set("tree.garland", v) } }
+                                Labeled { label: Tr.t("Цвета"); GSegment { ui: Theme; options: [{ v: "multi", t: Tr.t("Разноцветная") }, { v: "warm", t: Tr.t("Тёплая") }, { v: "accent", t: Tr.t("Цвета темы") }]; value: treeOpts.o.colors || "multi"; onPicked: (v) => Config.set("tree.colors", v) } }
+                                PillSlider { ui: Theme; width: parent.width; icon: "󰓅"; label: Tr.t("Скорость гирлянды"); from: 1; to: 10; stepSize: 1; decimals: 0; value: treeOpts.o.speed || 5; onCommitted: (v) => Config.set("tree.speed", v) }
+                                GSwitch { ui: Theme; label: Tr.t("Снег"); checked: treeOpts.o.snow !== false; onToggled: (v) => Config.set("tree.snow", v) }
+                                GSwitch { ui: Theme; label: Tr.t("Подарки под ёлкой"); checked: treeOpts.o.gifts !== false; onToggled: (v) => Config.set("tree.gifts", v) }
+                            }
                             PillSlider { visible: opts.t === "fish"; ui: Theme; width: parent.width; icon: "󰈺"; label: Tr.t("Рыбок"); from: 1; to: 8; stepSize: 1; decimals: 0; value: Config.store.fish.count || 4; onCommitted: (v) => Config.set("fish.count", v) }
                             Text { visible: ["notifs", "clawd", "moon", "quote"].indexOf(opts.t) >= 0; text: Tr.t("Других параметров нет"); color: Theme.sub; font.family: Theme.font; font.pixelSize: 11 }
                         }

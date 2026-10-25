@@ -62,12 +62,15 @@ WCard {
                 ctx.restore();
             }
         }
+        // подписи — в оставшуюся ширину, с переносом: в размере S «До полнолуния» вылезало за карточку
         Column {
             anchors.verticalCenter: parent.verticalCenter
+            width: w.cw - disk.width - 16 * w.k
             spacing: 4
-            Text { text: w.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 18 * Math.max(0.85, w.k); font.weight: Font.Bold }
-            Text { text: Tr.t("Освещено ") + w.lit + " %"; color: Theme.sub; font.family: Theme.font; font.pixelSize: 12 }
+            Text { width: parent.width; elide: Text.ElideRight; text: w.name; color: Theme.text; font.family: Theme.font; font.pixelSize: 18 * Math.max(0.85, w.k); font.weight: Font.Bold }
+            Text { width: parent.width; elide: Text.ElideRight; text: Tr.t("Освещено ") + w.lit + " %"; color: Theme.sub; font.family: Theme.font; font.pixelSize: 12 }
             Text {
+                width: parent.width; wrapMode: Text.WordWrap
                 text: w.toFull === 0 ? Tr.t("Сегодня полнолуние") : Tr.t("До полнолуния: ") + w.toFull + Tr.t(" дн.")
                 color: Theme.accent; font.family: Theme.font; font.pixelSize: 12
             }

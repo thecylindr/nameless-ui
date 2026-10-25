@@ -75,18 +75,68 @@ PanelWindow {
         }
         return Qt.point(x, y);
     }
-    function slotOf(type) { for (var i = 0; i < rep.count; i++) { var s = rep.itemAt(i); if (s && s.it.type === type) return s; } return null; }
-    // сетка: колонка по x и виджет той же колонки, перед которым встать по y
-    function gridDrop(slot, cx, y) {
-        var best = 0, bd = 1e9;
-        for (var c = 0; c < cols; c++) { var d = Math.abs(colX(c) + cellW / 2 - cx); if (d < bd) { bd = d; best = c; } }
-        var before = "";
-        for (var i = 0; i < items.length; i++) {
-            var m = gridMap[items[i].type];
-            if (!m || items[i].type === slot.it.type || m.c !== best) continue;
-            if (m.y + 20 > y) { before = items[i].type; break; }
+    function slotOf(type) { for (var i = 0; i < rep.count; i++) { var s = rep.itemAt(i); if (s && s.type === type) return s; } return null; }
+    function slotAt(i) { return i >= 0 && i < items.length ? slotOf(items[i].type) : null; }
+    function typeIndex(t) { for (var i = 0; i < items.length; i++) if (items[i].type === t) return i; return -1; }
+    // слоты привязаны к типу виджета, а не к номеру в списке: перестановка не перезагружает виджеты (раньше слот N после
+    // перестановки показывал уже другой виджет — все мигали и заново считали высоту)
+    readonly property string typeKey: items.map(function (t) { return t.type; }).filter(function (t, i, a) { return a.indexOf(t) === i; }).sort().join("\n")
+    // высоты слотов меняются отложенно (syncHeight): счётчик заставляет раскладки пересчитаться — без него карта мест
+    // иногда оставалась от прежних высот, и виджеты ложились друг на друга
+    property int hrev: 0
+
+    // ---------- перетаскивание по рядам и колонкам: живой предпросмотр ----------
+    // пока виджет тянут, соседи расступаются там, куда он встанет (как на iOS); место — перед dragBefore ("" — в конец),
+    // в колонках — ещё и колонка dragCol. Отпускание сохраняет порядок
+    property string dragType: ""
+    property string dragBefore: ""
+    property int dragCol: -1
+    property bool dragArmed: false
+    // порядок пунктов с учётом предпросмотра (номера в items)
+    function order() {
+        var idx = [], i;
+        for (i = 0; i < items.length; i++) idx.push(i);
+        if (dragType === "" || !dragArmed) return idx;
+        var from = typeIndex(dragType); if (from < 0) return idx;
+        idx.splice(idx.indexOf(from), 1);
+        var to = dragBefore === "" ? idx.length : idx.indexOf(typeIndex(dragBefore));
+        idx.splice(to < 0 ? idx.length : to, 0, from);
+        return idx;
+    }
+    // следующий после type по порядку (в колонках — в той же колонке), не считая перетаскиваемого
+    function nextAfter(type, col) {
+        var o = order(), seen = false;
+        for (var k = 0; k < o.length; k++) {
+            var t = items[o[k]].type;
+            if (t === dragType) continue;
+            if (seen && (col < 0 || (gridMap[t] && gridMap[t].c === col))) return t;
+            if (t === type) seen = true;
         }
-        return { col: best, before: before };
+        return "";
+    }
+    // точка курсора (px, py): над соседом — встать перед ним (левая или верхняя половина) или после; над пустым местом — без изменений,
+    // в колонках ниже всех — в конец колонки
+    function previewDrop(slot, px, py) {
+        var others = slots().filter(function (o) { return o !== slot; }), target = null, i;
+        for (i = 0; i < others.length; i++) {
+            var o = others[i];
+            if (px >= o.x && px <= o.x + o.width && py >= o.y && py <= o.y + o.height) { target = o; break; }
+        }
+        if (gridMode) {
+            var best = 0, bd = 1e9;
+            for (var c = 0; c < cols; c++) { var d = Math.abs(colX(c) + cellW / 2 - px); if (d < bd) { bd = d; best = c; } }
+            if (best !== dragCol) { dragCol = best; dragArmed = true; if (!target) dragBefore = ""; }
+            if (!target) {
+                var below = true;
+                for (i = 0; i < others.length; i++) { var m = gridMap[others[i].type]; if (m && m.c === best && py < others[i].y + others[i].height) below = false; }
+                if (below) { dragBefore = ""; dragArmed = true; }
+                return;
+            }
+        }
+        if (!target) return;
+        var after = gridMode ? py > target.y + target.height / 2 : px > target.x + target.width / 2;
+        dragBefore = after ? nextAfter(target.type, gridMode ? dragCol : -1) : target.type;
+        dragArmed = true;
     }
     function nudge(dx, dy) {
         // сетка: стрелки влево-вправо — соседняя колонка, вверх-вниз — место в колонке
@@ -110,7 +160,7 @@ PanelWindow {
                                     notifs: "WNotifs.qml", weather: "WWeather.qml", notes: "WNotes.qml", timer: "WTimer.qml",
                                     actions: "WActions.qml", photo: "WPhoto.qml", updates: "WUpdates.qml", countdown: "WCountdown.qml", agents: "WAgents.qml", claude: "WClaude.qml", tokens: "WTokens.qml", orbit: "WOrbit.qml", touch: "WTouch.qml",
                                     pets: "WPets.qml", clawd: "WClawd.qml", gif: "WGif.qml",
-                                    fish: "WFish.qml", moon: "WMoon.qml", quote: "WQuote.qml" })
+                                    fish: "WFish.qml", moon: "WMoon.qml", quote: "WQuote.qml", tree: "WTree.qml" })
     readonly property var items: Config.widgets.items
     readonly property bool right: Config.widgets.side === "right"
     readonly property int top0: 56            // под баром
@@ -150,13 +200,15 @@ PanelWindow {
     function spanOf(it) { return it.size === "L" ? 2 : 1; }
     // раскладка: виджеты по порядку списка, каждый — в свою колонку, под предыдущими (широкий — на две)
     readonly property var gridMap: {
-        var h = [], out = {}, i, c;
+        var h = [], out = {}, i, c, o = order(), rv = hrev;
         for (c = 0; c < cols; c++) h.push(top0);
-        for (i = 0; i < items.length; i++) {
-            var it = items[i], s = rep.count > i ? rep.itemAt(i) : null;
+        for (var n = 0; n < o.length; n++) {
+            i = o[n];
+            var it = items[i], s = slotAt(i);
             if (!s || !s.shown) continue;
             var sp = Math.min(cols, spanOf(it));
-            c = Math.max(0, Math.min(cols - sp, it.col === undefined ? 0 : it.col));
+            var want = it.type === dragType && dragArmed && dragCol >= 0 ? dragCol : (it.col === undefined ? 0 : it.col);
+            c = Math.max(0, Math.min(cols - sp, want));
             var y = h[c];
             for (var k = 1; k < sp; k++) y = Math.max(y, h[c + k]);
             out[it.type] = { x: right ? colX(c + sp - 1) : colX(c), y: y, w: sp * cellW + (sp - 1) * gap, c: c };
@@ -168,7 +220,7 @@ PanelWindow {
     // (сохранённому или следующему в колонке); занятые узлы пропускаются, поэтому виджеты не наслаиваются
     readonly property var grid2Map: {
         if (!grid2) return {};
-        var out = {}, taken = [], autoY = top0;
+        var out = {}, taken = [], autoY = top0, rv = hrev;
         function hit(x, y, wd, ht) {
             for (var k = 0; k < taken.length; k++) {
                 var t = taken[k];
@@ -177,7 +229,7 @@ PanelWindow {
             return false;
         }
         for (var i = 0; i < items.length; i++) {
-            var it = items[i], sl = rep.count > i ? rep.itemAt(i) : null;
+            var it = items[i], sl = slotAt(i);
             if (!sl || !sl.shown) continue;
             var wd = sl.width, ht = sl.height, placedIt = it.x !== undefined && it.y !== undefined;
             var x = snapCell(placedIt ? it.x : (right ? width - wd - 16 : 16), 16, width - wd - 8);
@@ -226,9 +278,9 @@ PanelWindow {
     // место колонкой от своего края
     readonly property var freeMap: {
         if (!freeMode || width <= 0) return {};
-        var out = {}, taken = [], rest = [], i, it, sl;
+        var out = {}, taken = [], rest = [], i, it, sl, rv = hrev;
         for (i = 0; i < items.length; i++) {
-            it = items[i]; sl = rep.count > i ? rep.itemAt(i) : null;
+            it = items[i]; sl = slotAt(i);
             if (!sl || !sl.shown) continue;
             if (it.x === undefined && it.rx === undefined) { rest.push(i); continue; }
             var px = it.rx !== undefined ? it.rx * width : it.x, py = it.ry !== undefined ? it.ry * height : it.y;
@@ -236,7 +288,7 @@ PanelWindow {
             out[it.type] = p; taken.push({ x: p.x, y: p.y, w: sl.width, h: sl.height });
         }
         for (var k = 0; k < rest.length; k++) {
-            it = items[rest[k]]; sl = rep.itemAt(rest[k]);
+            it = items[rest[k]]; sl = slotAt(rest[k]);
             var q = nearestFree(right ? width - sl.width - 16 : 16, top0, sl.width, sl.height, taken);
             out[it.type] = q; taken.push({ x: q.x, y: q.y, w: sl.width, h: sl.height });
         }
@@ -261,7 +313,7 @@ PanelWindow {
     readonly property int wantRows: Math.max(0, Math.min(6, Config.widgets.rows || 0))
     readonly property bool fixedGrid: (autoMode || gridMode) && (wantCols > 0 || wantRows > 0)
     // считаются только видимые: пустой виджет (плеер без музыки) колонку не занимает
-    readonly property int shownCount: { var n = 0; for (var i = 0; i < rep.count; i++) { var s = rep.itemAt(i); if (s && s.shown) n++; } return Math.max(1, n); }
+    readonly property int shownCount: { var n = 0, rv = hrev; for (var i = 0; i < rep.count; i++) { var s = rep.itemAt(i); if (s && s.shown) n++; } return Math.max(1, n); }
     readonly property int fixedCols: wantCols > 0 ? wantCols : Math.max(1, Math.ceil(shownCount / Math.max(1, wantRows)))
     readonly property real fixedColW: Math.max(160, (width - 32 - (fixedCols - 1) * 16) / fixedCols)
     readonly property real ws: fixedGrid && width > 0 ? Math.max(0.6, Math.min(2.2, fixedColW / 300))
@@ -282,10 +334,11 @@ PanelWindow {
     readonly property real autoX0: fixedGrid || align === "left" || align === "fill" ? 16 : (align === "right" ? width - 16 - autoTotal : (width - autoTotal) / 2)
     readonly property var autoMap: {
         if (!autoMode) return {};
-        var h = [], out = {}, c, i;
+        var h = [], out = {}, c, i, o = order(), rv = hrev;
         for (c = 0; c < autoCols; c++) h.push(top0);
-        for (i = 0; i < items.length; i++) {
-            var it = items[i], s = rep.count > i ? rep.itemAt(i) : null;
+        for (var n = 0; n < o.length; n++) {
+            i = o[n];
+            var it = items[i], s = slotAt(i);
             if (!s || !s.shown) continue;
             var sp = Math.min(autoCols, spanOf(it)), best = 0, by = 1e9;
             // самая низкая «крыша» среди подходящих мест (для широкого — по двум колонкам)
@@ -299,20 +352,6 @@ PanelWindow {
         }
         return out;
     }
-    // перетаскивание по рядам: встать перед виджетом, ближайшим к точке отпускания
-    function autoDrop(type, cx, cy) {
-        var best = "", bd = 1e12;
-        for (var t in autoMap) {
-            if (t === type) continue;
-            var s = slotOf(t); if (!s) continue;
-            var d = Math.pow(autoMap[t].x + s.width / 2 - cx, 2) + Math.pow(autoMap[t].y + s.height / 2 - cy, 2);
-            if (d < bd) { bd = d; best = t; }
-        }
-        return best;
-    }
-
-    // куда встанет перетаскиваемый в сетке: колонка под курсором и виджет, перед которым
-    property var dropAt: null
     readonly property int grid: 8
 
     // ---------- фон режима правки и меню стола ----------
@@ -355,7 +394,7 @@ PanelWindow {
     function autoY(index) {
         var y = top0;
         for (var i = 0; i < index; i++) {
-            var it = items[i], slot = rep.itemAt(i);
+            var it = items[i], slot = slotAt(i);
             if (!it.on || it.x !== undefined || !slot || !slot.shown) continue;
             // сетка по двум осям: каждый занимает целое число узлов, иначе после привязки они наложились бы
             y += grid2 ? Math.ceil((slot.height + 4) / pitch) * pitch : slot.height + 12;
@@ -365,12 +404,14 @@ PanelWindow {
 
     Repeater {
         id: rep
-        // модель — число пунктов: при изменении настроек виджеты переиспользуются, а не создаются заново
-        model: w.items.length
+        // модель — набор типов (отсортированный): перестановка и правка настроек виджеты не пересоздают
+        model: w.typeKey === "" ? [] : w.typeKey.split("\n")
         Item {
             id: slot
-            required property int index
-            readonly property var it: w.items[index] || ({})
+            required property string modelData
+            readonly property string type: modelData
+            readonly property int ord: w.typeIndex(type)
+            readonly property var it: ord >= 0 ? w.items[ord] : ({})
             readonly property bool placed: it.x !== undefined && it.y !== undefined
             readonly property bool shown: w.cardsOn && it.on === true && loader.status === Loader.Ready && loader.item.empty !== true
             visible: shown
@@ -382,11 +423,15 @@ PanelWindow {
             // высота — из виджета, но отложенно (Qt.callLater): ширина в раскладке «по рядам» зависит от числа видимых виджетов,
             // а та — от загрузки соседей; прямая привязка ловила цикл, и Qt оставлял высоту от прежней ширины (часы вылезали за карточку)
             height: 0
-            function syncHeight() { height = loader.item ? Math.max(0, loader.item.implicitHeight) * w.ws : 0; }
+            function syncHeight() {
+                var nh = loader.item ? Math.max(0, loader.item.implicitHeight) * w.ws : 0;
+                if (Math.abs(nh - height) > 0.5) { height = nh; w.hrev++; }
+            }
+            onShownChanged: w.hrev++
             Connections { target: loader.item; ignoreUnknownSignals: true; function onImplicitHeightChanged() { Qt.callLater(slot.syncHeight); } }
             // место по настройкам; во время перетаскивания — плюс смещение жеста
             readonly property real freeX: placed ? Math.min(it.x, w.width - width - 8) : (w.right ? w.width - width - 16 : 16)
-            readonly property real freeY: placed ? Math.min(it.y, w.height - height - 8) : w.autoY(index)
+            readonly property real freeY: placed ? Math.min(it.y, w.height - height - 8) : w.autoY(ord)
             readonly property var g2: w.grid2 ? (w.grid2Map[it.type] || null) : null
             readonly property var am: w.autoMode ? (w.autoMap[it.type] || null) : null
             readonly property var fm: w.freeMode ? (w.freeMap[it.type] || null) : null
@@ -394,13 +439,17 @@ PanelWindow {
             readonly property real baseY: am ? am.y : (cell ? cell.y : (g2 ? g2.y : (fm ? fm.y : freeY)))
             // во время перетаскивания — с привязкой к соседям и краям экрана
             // свободно — с привязкой к соседям и краям; в сетке виджет просто следует за курсором
+            // жест считается от точки, где виджет был в начале (sx, sy): место в раскладке во время предпросмотра сдвигается,
+            // и виджет под курсором раньше «уезжал» вместе с ним
+            property real sx: 0
+            property real sy: 0
             readonly property var snapped: !drag.active ? null
-                : (w.gridMode || w.autoMode ? { x: baseX + drag.activeTranslation.x, y: baseY + drag.activeTranslation.y, gx: -1, gy: -1 }
-                : (w.grid2 ? { x: w.snapCell(baseX + drag.activeTranslation.x, 16, w.width - width - 8), y: w.snapCell(baseY + drag.activeTranslation.y, w.top0, w.height - height - 8), gx: -1, gy: -1 }
-                : w.snapTo(slot, baseX + drag.activeTranslation.x, baseY + drag.activeTranslation.y)))
+                : (w.gridMode || w.autoMode ? { x: sx + drag.activeTranslation.x, y: sy + drag.activeTranslation.y, gx: -1, gy: -1 }
+                : (w.grid2 ? { x: w.snapCell(sx + drag.activeTranslation.x, 16, w.width - width - 8), y: w.snapCell(sy + drag.activeTranslation.y, w.top0, w.height - height - 8), gx: -1, gy: -1 }
+                : w.snapTo(slot, sx + drag.activeTranslation.x, sy + drag.activeTranslation.y)))
             onSnappedChanged: if (snapped) {
                 w.guideX = snapped.gx; w.guideY = snapped.gy;
-                if (w.gridMode) w.dropAt = w.gridDrop(slot, snapped.x + width / 2, snapped.y);
+                if (w.gridMode || w.autoMode) { var cp = drag.centroid.scenePosition; w.previewDrop(slot, cp.x, cp.y); }
                 if (w.freeMode) { var gp = w.nearestFree(snapped.x, snapped.y, width, height, w.othersRects(slot)); w.ghost = { x: gp.x, y: gp.y, w: width, h: height }; }
             }
             x: snapped ? snapped.x : baseX
@@ -461,30 +510,27 @@ PanelWindow {
                 property real ly: 0
                 onActiveTranslationChanged: if (active) { lx = activeTranslation.x; ly = activeTranslation.y; }
                 onActiveChanged: {
-                    if (active) { w.sel = slot.it.type; return; }
-                    w.guideX = -1; w.guideY = -1;
-                    // по рядам: меняется только порядок — встать перед ближайшим к точке отпускания
-                    if (w.autoMode) {
-                        var before = w.autoDrop(slot.it.type, slot.baseX + lx + slot.width / 2, slot.baseY + ly + slot.height / 2);
-                        if (before !== "") Config.gridMove(slot.it.type, slot.it.col || 0, before);
+                    if (active) {
+                        w.sel = slot.type; slot.sx = slot.x; slot.sy = slot.y;
+                        if (w.gridMode || w.autoMode) { w.dragType = slot.type; w.dragBefore = ""; w.dragCol = w.gridMode ? (slot.it.col || 0) : -1; w.dragArmed = false; }
                         return;
                     }
-                    if (w.gridMode) {
-                        // сетка: в колонку под курсором, перед виджетом ниже точки отпускания
-                        var t = w.gridDrop(slot, slot.baseX + lx + slot.width / 2, slot.baseY + ly);
-                        w.dropAt = null;
-                        Config.gridMove(slot.it.type, t.col, t.before);
+                    w.guideX = -1; w.guideY = -1;
+                    // по рядам и колонкам: сохраняется место из предпросмотра (сначала порядок, потом снимается предпросмотр — без мигания)
+                    if (w.autoMode || w.gridMode) {
+                        if (w.dragArmed) Config.gridMove(slot.type, w.gridMode ? w.dragCol : (slot.it.col || 0), w.dragBefore);
+                        w.dragType = ""; w.dragArmed = false; w.dragCol = -1;
                         return;
                     }
                     // сетка по двум осям: ближайший свободный узел
                     if (w.grid2) {
-                        var c = w.freeCell(slot, w.snapCell(slot.baseX + lx, 16, w.width - slot.width - 8), w.snapCell(slot.baseY + ly, w.top0, w.height - slot.height - 8));
+                        var c = w.freeCell(slot, w.snapCell(slot.sx + lx, 16, w.width - slot.width - 8), w.snapCell(slot.sy + ly, w.top0, w.height - slot.height - 8));
                         Config.placeWidget(slot.it.type, c.x, c.y);
                         return;
                     }
                     // свободно: привязка, затем свободное место без наложения
                     // свободно: привязка, затем ближайшее свободное место (во все стороны), место — и в долях экрана
-                    var r = w.snapTo(slot, slot.baseX + lx, slot.baseY + ly), f = w.nearestFree(r.x, r.y, slot.width, slot.height, w.othersRects(slot));
+                    var r = w.snapTo(slot, slot.sx + lx, slot.sy + ly), f = w.nearestFree(r.x, r.y, slot.width, slot.height, w.othersRects(slot));
                     w.ghost = null;
                     Config.placeWidget(slot.it.type, f.x, f.y, f.x / w.width, f.y / w.height);
                 }
@@ -560,8 +606,8 @@ PanelWindow {
     }
     // сетка: колонка, куда встанет перетаскиваемый
     Rectangle {
-        visible: w.edit && w.gridMode && w.dropAt !== null
-        x: w.dropAt ? w.colX(w.dropAt.col) : 0
+        visible: w.edit && w.gridMode && w.dragType !== "" && w.dragCol >= 0
+        x: w.colX(Math.max(0, w.dragCol))
         y: w.top0 - 6
         width: w.cellW; height: w.height - w.top0 - 100
         radius: 22

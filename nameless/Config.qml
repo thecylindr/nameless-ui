@@ -35,6 +35,7 @@ Singleton {
         clawd:    { name: "Клод",        icon: "󰚩", about: "пиксельный Claude: печатает, пока помощник работает, машет, когда ждёт ответа, спит без дела" },
         gif:      { name: "GIF",         icon: "󰵸", about: "анимированная картинка или папка с ними; пиксельно, без сглаживания" },
         fish:     { name: "Аквариум",    icon: "󰈺", about: "пиксельные рыбки, пузырьки и водоросли; нажатие — рыбки разбегаются" },
+        tree:     { name: "Ёлочка",      icon: "󰐅", about: "пиксельная новогодняя ель с гирляндой, снегом и подарками; дни до Нового года" },
         moon:     { name: "Луна",        icon: "󰽥", about: "фаза Луны на сегодня, освещённость и сколько дней до полнолуния" },
         quote:    { name: "Фраза дня",   icon: "󰉾", about: "короткая тёплая мысль, каждый день новая; нажатие — следующая" }
     })
@@ -91,6 +92,7 @@ Singleton {
                 { type: "clawd", on: false, size: "S" },
                 { type: "gif", on: false, size: "S" },
                 { type: "fish", on: false, size: "M" },
+                { type: "tree", on: false, size: "S" },
                 { type: "moon", on: false, size: "M" },
                 { type: "quote", on: false, size: "M" }
             ]
@@ -119,7 +121,8 @@ Singleton {
         pets: { list: ["ginger", "white"], unit: 4, ground: true, scene: "auto" },     // scene: auto (по дате) | none | park | home | night | winter | beach | spring | autumn | newyear | halloween | valentine             // ginger | white | corgi | clawd; unit — размер «пикселя» спрайта
         gif: { path: "", pixel: true, scale: 1, interval: 30, card: false },     // файл или папка; pixel — без сглаживания
         icons: { overrides: {} },
-        fish: { count: 4 },                                                     // рыбок в аквариуме                                               // свои значки приложений: { имя значка: имя в теме | /путь }           // с
+        fish: { count: 4 },
+        tree: { garland: "chase", colors: "multi", speed: 5, snow: true, gifts: true },     // ёлочка: гирлянда chase | twinkle | wave, цвета multi | warm | accent                                                     // рыбок в аквариуме                                               // свои значки приложений: { имя значка: имя в теме | /путь }           // с
         updates: { interval: 60 },                            // мин
         countdown: { title: "Новый год", date: "2027-01-01" },
         orbit: { enabled: true, bar: true, dock: true, indock: false, autostart: true, claude: true, claudeMin: 20 },   // claude — сообщать на устройства, что Claude закончил работу; claudeMin — не короче стольких секунд             // верхний док устройств; запуск Orbit в фоне, когда он нужен
