@@ -6,6 +6,7 @@ import Quickshell.Wayland
 // подключение по IP, «найти», буфер обмена. Данные и команды — OrbitData (D-Bus); окно Orbit для этого не нужно
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     property real progress: 0
     Component.onCompleted: progress = Qt.binding(function () { return OrbitData.panelOpen ? 1 : 0; })

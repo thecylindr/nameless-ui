@@ -7,6 +7,7 @@ import Quickshell.Wayland
 // SUPER+F1, шапка Пункта управления; IPC — help toggle / keys toggle
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null          // shell.qml: панели «Рабочий стол» и Пункт управления
     property bool open: false
     property int tab: 0

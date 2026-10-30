@@ -10,6 +10,7 @@ import Quickshell.Wayland
 // Состояние пакетов проверяется при открытии и после установки
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.featuresOpen : false
     function close() { if (shell) shell.featuresOpen = false; }

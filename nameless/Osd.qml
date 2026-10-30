@@ -5,6 +5,7 @@ import Quickshell.Wayland
 // OSD громкости и яркости: таблетка внизу по центру на 1.5 с после изменения
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property string kind: "volume"
     property bool shown: false
     property real progress: shown ? 1 : 0

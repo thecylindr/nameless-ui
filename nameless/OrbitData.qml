@@ -97,11 +97,16 @@ Singleton {
     // сигнал VirtualScreen: open — монитор создан (чей он), closing — сейчас будет удалён: окна NameLess с него убираются заранее
     property var virtualScreens: ({})       // { HEADLESS-ORBIT-N: { peer, kind } }
     property var closingScreens: []
+    // Orbit выключили или он перестал отвечать — экраны, о которых он объявлял, больше не считаются
+    onEnabledChanged: if (!enabled) { virtualScreens = ({}); closingScreens = []; }
     Process {
         running: d.enabled
-        command: ["dbus-monitor", "--session", "type='signal',interface='" + d.svc + "',member='VirtualScreen'"]
+        // вторым правилом — исчезновение Orbit с шины: убитый Orbit не шлёт «closing», а страж снимет монитор через ~1 с
+        command: ["dbus-monitor", "--session", "type='signal',interface='" + d.svc + "',member='VirtualScreen'",
+                  "type='signal',interface='org.freedesktop.DBus',member='NameOwnerChanged',arg0='" + d.svc + "'"]
         stdout: SplitParser {
             onRead: line => {
+                if (line.indexOf("member=NameOwnerChanged") >= 0) { d.virtualScreens = ({}); d.closingScreens = []; return; }
                 var i = line.indexOf("string \"");
                 if (i < 0) return;
                 try {

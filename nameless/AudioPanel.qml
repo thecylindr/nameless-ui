@@ -13,6 +13,7 @@ import Quickshell.Services.Pipewire
 // включается только на открытой вкладке
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.audioOpen : false
     function close() { if (shell) shell.audioOpen = false; }

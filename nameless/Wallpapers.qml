@@ -12,6 +12,7 @@ import Quickshell.Wayland
 // Данные из сети даёт wallnet.sh рядом (бесплатные источники без ключей). Ставит обои wallpapers.sh — тот же сервис, что у ротации
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.wallpapersOpen : false
     function close() { if (shell) shell.wallpapersOpen = false; }

@@ -8,6 +8,7 @@ import Quickshell.Wayland
 // нажатие на две плитки — поменять местами, «Добавить» — плитки, которых нет. Во весь экран — кнопка рядом
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     // открыт/закрыт — состояние оболочки (shell.qml): закрытие изнутри не обрывает привязку
     readonly property bool open: shell ? shell.controlOpen : false

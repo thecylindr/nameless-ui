@@ -7,6 +7,7 @@
 #   ./install.sh --deps         то же, что без аргументов, но сначала минимум пакетов из minimal.txt (pacman / AUR через yay)
 #   ./install.sh keys           только клавиши NameLess UI (Hyprland, driftwm, справка SUPER+F1) — список в hypr/nameless-keys.txt
 #   ./install.sh drivers        только драйверы видеокарты и процессора (scripts/system/driver.sh: подбирает ветку и для старых карт)
+#   ./install.sh check          проверка: нужные программы, клавиши, скрипты, отвечает ли оболочка (ничего не меняет)
 #   ./install.sh --restore      вернуть самые свежие прежние файлы оболочки
 #   ./install.sh --help         эта справка
 #
@@ -35,10 +36,31 @@ need_pkgs() {
     done
 }
 
+# программы, без которых часть клавиш и окон молчит: [обязательные | необязательные] «команда:пакет»
+RUNTIME_REQ=(qs:quickshell jq:jq python3:python grim:grim slurp:slurp wl-copy:wl-clipboard notify-send:libnotify pgrep:procps-ng timeout:coreutils)
+RUNTIME_OPT=(tesseract:tesseract cliphist:cliphist playerctl:playerctl brightnessctl:brightnessctl kitty:kitty swappy:swappy busctl:systemd dbus-monitor:dbus)
+check_runtime() {
+    local e miss=() opt=()
+    for e in "${RUNTIME_REQ[@]}"; do command -v "${e%%:*}" >/dev/null || miss+=("${e##*:}"); done
+    for e in "${RUNTIME_OPT[@]}"; do command -v "${e%%:*}" >/dev/null || opt+=("${e##*:}"); done
+    command -v hyprctl >/dev/null || [[ -f "$HOME/.config/driftwm/config.toml" ]] || warn "не найден ни Hyprland (hyprctl), ни driftwm — клавиши некуда подключать"
+    (( ${#miss[@]} )) && warn "не хватает нужного: ${miss[*]} — ./install.sh --deps поставит минимум (Arch)"
+    (( ${#opt[@]} )) && say "не обязательно, но пригодится: ${opt[*]} (нужны для отдельных окон и клавиш: OCR, буфер, плеер, яркость, Orbit)"
+    return 0
+}
+
+# копия папки оболочки без кэша Python; скрипты и Python-сборщики — исполняемые (иначе ярлыки и клавиши молчат)
+copy_dir() {
+    cp -a "$1" "$2" || return 1
+    find "$2" -name __pycache__ -type d -prune -exec rm -rf {} + 2>/dev/null
+    find "$2" -maxdepth 2 \( -name '*.sh' -o -name '*.py' \) -exec chmod +x {} + 2>/dev/null
+    return 0
+}
+
 # ---------- NameLess UI: оболочка и шторка ----------
 install_shell() {
     head_ "NameLess UI — оболочка и шторка «Оформление»"
-    command -v qs >/dev/null || warn "Quickshell (qs) не найден: поставьте пакет quickshell, иначе оболочка не запустится."
+    check_runtime
     mkdir -p "$DEST"
     local d
     for d in nameless ThemeDrawer; do
@@ -47,7 +69,7 @@ install_shell() {
             mkdir -p "$BACKUP"; mv "$DEST/$d" "$BACKUP/$d"
             say "прежний $d сохранён в $BACKUP"
         fi
-        cp -a "$HERE/$d" "$DEST/$d"
+        copy_dir "$HERE/$d" "$DEST/$d" || { warn "не удалось скопировать $d в $DEST"; FAILED+=("$d"); continue; }
         say "установлен $d"
     done
     # запуск программ: qs-app.sh (окружение сессии) нужен AppRun.qml; rofi-run.sh — фокус на уже открытое окно (Incy, Telegram…) при запуске из rofi
@@ -236,6 +258,16 @@ install_keys() {
     mkdir -p "$hypr/Scripts"
     cp -af "$HERE/scripts/nameless-action.sh" "$HERE/scripts/ocr.sh" "$hypr/Scripts/" && chmod +x "$hypr/Scripts/nameless-action.sh" "$hypr/Scripts/ocr.sh"
     local rows; rows="$(grep -v '^#' "$list" | grep -v '^[[:space:]]*$')"
+    # строка без пяти полей или с неизвестным действием не должна ломать остальные привязки; одно сочетание дважды — берётся первое
+    local ok="" mods key action sec what seen="|" line
+    while IFS= read -r line; do
+        IFS='|' read -r mods key action sec what <<<"$line"
+        if [[ -z "$mods" || -z "$key" || -z "$action" || -z "$what" ]]; then warn "клавиши: строка пропущена (нужно 5 полей через |): $line"; continue; fi
+        if ! grep -qE "^[[:space:]]+(.*\|)?$action(\)|\|)" "$HERE/scripts/nameless-action.sh"; then warn "клавиши: у $mods+$key нет действия «$action» в nameless-action.sh — пропущено"; continue; fi
+        [[ "$seen" == *"|$mods+$key|"* ]] && { warn "клавиши: $mods+$key повторяется — вторая строка пропущена"; continue; }
+        seen+="$mods+$key|"; ok+="$line"$'\n'
+    done <<<"$rows"
+    rows="${ok%$'\n'}"
 
     # Hyprland
     if [[ -f "$hypr/hyprland.lua" ]]; then
@@ -262,6 +294,10 @@ install_keys() {
                 echo "bind = $m, $key, exec, $act $action"
             done <<<"$rows"
         } > "$hypr/nameless-binds.conf"
+        # оболочка стартует вместе с сессией, если конфиг её ещё не запускает (клавиши и без этого поднимают её по требованию)
+        if ! grep -qE "(qs|quickshell)[^#]* -c nameless|theme\.sh" "$hypr/hyprland.conf"; then
+            echo "exec-once = sh -c 'qs -c nameless ipc show >/dev/null 2>&1 || exec qs -c nameless'" >> "$hypr/nameless-binds.conf"
+        fi
         if ! grep -qF "nameless-binds.conf" "$hypr/hyprland.conf"; then
             cp -a "$hypr/hyprland.conf" "$hypr/hyprland.conf.nameless-bak"
             printf '\n# клавиши NameLess UI (install.sh)\nsource = %s\n' "$hypr/nameless-binds.conf" >> "$hypr/hyprland.conf"
@@ -305,6 +341,25 @@ install_keys() {
     fi
 }
 
+# ---------- проверка без изменений ----------
+cmd_check() {
+    head_ "Проверка NameLess UI"
+    local hypr="$HOME/.config/hypr" f bad=0
+    check_runtime
+    for f in "$DEST/nameless/shell.qml" "$DEST/nameless/ipc.sh" "$DEST/nameless/taskmon.py" "$hypr/Scripts/nameless-action.sh" "$hypr/Scripts/ocr.sh" "$hypr/Scripts/qs-app.sh"; do
+        [[ -e "$f" ]] || { warn "нет файла: $f"; bad=1; continue; }
+        [[ "$f" == *.qml ]] || [[ -x "$f" ]] || { warn "не исполняемый: $f (chmod +x)"; bad=1; }
+    done
+    if [[ -f "$hypr/hyprland.lua" ]]; then
+        [[ -f "$hypr/nameless-binds.lua" ]] && grep -qF nameless-binds.lua "$hypr/hyprland.lua" && say "клавиши подключены (hyprland.lua)" || { warn "клавиши не подключены: ./install.sh keys"; bad=1; }
+    elif [[ -f "$hypr/hyprland.conf" ]]; then
+        [[ -f "$hypr/nameless-binds.conf" ]] && grep -qF nameless-binds.conf "$hypr/hyprland.conf" && say "клавиши подключены (hyprland.conf)" || { warn "клавиши не подключены: ./install.sh keys"; bad=1; }
+    fi
+    if command -v qs >/dev/null && timeout 3 qs -c nameless ipc show >/dev/null 2>&1; then say "оболочка отвечает"
+    else warn "оболочка не отвечает (не запущена? qs -c nameless) — клавиши поднимут её сами"; fi
+    (( bad )) && FAILED+=("check")
+}
+
 # ---------- запуск ----------
 case "${1:-}" in
     "")          install_shell; install_keys; install_drivers ;;
@@ -314,9 +369,10 @@ case "${1:-}" in
     all)         install_shell; install_keys; install_orbit; install_drivers ;;
     --deps)      install_deps; install_shell; install_keys; install_drivers ;;
     drivers)     install_drivers force ;;
+    check)       cmd_check ;;
     --restore)   restore; exit 0 ;;
-    -h|--help)   sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *)           warn "не знаю команды «$1». Доступно: orbit, shell, keys, all, drivers, --deps, --restore, --help"; exit 2 ;;
+    -h|--help)   sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)           warn "не знаю команды «$1». Доступно: orbit, shell, keys, all, drivers, check, --deps, --restore, --help"; exit 2 ;;
 esac
 
 echo

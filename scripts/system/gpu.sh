@@ -49,19 +49,31 @@ holders() {
     done | sort -u -k2
 }
 
-# карта, на которой рисует рабочий стол (встроенная, boot_vga = 1) — для AQ_DRM_DEVICES в режиме «Экономия»
-igpu_card() {
-    local d slot
+# PCI-адрес встроенной (boot_vga = 1) и дискретной видеокарты — для AQ_DRM_DEVICES
+igpu_slot() {
+    local d
     for d in /sys/bus/pci/devices/*; do
-        [[ "$(cat "$d/class" 2>/dev/null)" == 0x03* && "$(cat "$d/boot_vga" 2>/dev/null)" == 1 ]] || continue
-        slot="$(basename "$d")"
-        [[ -e "/dev/dri/by-path/pci-$slot-card" ]] && { readlink -f "/dev/dri/by-path/pci-$slot-card"; return 0; }
+        [[ "$(cat "$d/class" 2>/dev/null)" == 0x03* && "$(cat "$d/boot_vga" 2>/dev/null)" == 1 ]] && { basename "$d"; return 0; }
     done
     return 1
 }
+dgpu_slot() { local d; d="$(dgpu)" && basename "$d"; }
+
+# Lua, который при каждом старте Hyprland сам находит карты по PCI-адресу: номера card0 / card1 между загрузками могут поменяться местами,
+# а записанный при смене режима «/dev/dri/card0» тогда указывал бы на другую видеокарту. Не нашлось — переменная не задаётся
+lua_drm() {
+    cat <<EOF
+local function card(slot)
+    local p = io.popen("readlink -f /dev/dri/by-path/pci-" .. slot .. "-card 2>/dev/null")
+    local r = p and p:read("*l")
+    if p then p:close() end
+    return (r and r:match("^/dev/dri/card%d+$")) and r or nil
+end
+EOF
+}
 
 write_lua() {
-    local card
+    local d i
     [[ -d "$(dirname "$GPU_LUA")" ]] || return 0
     if [[ "$1" == on ]]; then
         cat > "$GPU_LUA" <<'EOF'
@@ -70,10 +82,16 @@ hl.env("LIBVA_DRIVER_NAME", "nvidia")
 hl.env("GBM_BACKEND", "nvidia-drm")
 hl.env("__GLX_VENDOR_LIBRARY_NAME", "nvidia")
 EOF
-    elif [[ "$1" == eco ]] && card="$(igpu_card)"; then
+        # без AQ_DRM_DEVICES Hyprland рисует на встроенной (первой считает карту с монитором ноутбука), а дискретная простаивает:
+        # первой в списке — карта, на которой рисуется, остальные — для вывода на их порты
+        if d="$(dgpu_slot)" && i="$(igpu_slot)"; then
+            { lua_drm; printf 'local dg, ig = card("%s"), card("%s")\nif dg and ig then hl.env("AQ_DRM_DEVICES", dg .. ":" .. ig) end\n' "$d" "$i"; } >> "$GPU_LUA"
+        fi
+    elif [[ "$1" == eco ]] && i="$(igpu_slot)"; then
         # Hyprland открывает только встроенную: иначе он держит дискретную, и она не засыпает.
         # Мониторы, подключённые к портам дискретной (часто HDMI ноутбука), в этом режиме не работают
-        printf -- '-- Режим «Экономия» (gpu.sh): Hyprland только на встроенной, дискретная спит\nhl.env("AQ_DRM_DEVICES", "%s")\n' "$card" > "$GPU_LUA"
+        { echo '-- Режим «Экономия» (gpu.sh): Hyprland только на встроенной, дискретная спит'; lua_drm
+          printf 'local ig = card("%s")\nif ig then hl.env("AQ_DRM_DEVICES", ig) end\n' "$i"; } > "$GPU_LUA"
     else
         echo '-- Переменные NVIDIA не заданы: рисует встроенная, дискретная — по требованию (gpu.sh: гибрид)' > "$GPU_LUA"
     fi

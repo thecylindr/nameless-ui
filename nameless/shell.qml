@@ -241,7 +241,7 @@ ShellRoot {
             root.entries.forEach(function (e) {
                 args.push(e[0] + ".desktop");
                 args.push(on && hidden.indexOf(e[0]) < 0 ? ["[Desktop Entry]", "Type=Application", "Name=" + (en ? e[2] : e[1]), "Comment=" + Tr.t(e[3]), "Icon=" + e[4],
-                                "Exec=qs -c nameless ipc call " + e[5], "Categories=" + e[6], "Keywords=" + e[7], "StartupNotify=false", ""].join("\n") : "");
+                                "Exec=sh \"" + Quickshell.shellDir + "/ipc.sh\" " + e[5], "Categories=" + e[6], "Keywords=" + e[7], "StartupNotify=false", ""].join("\n") : "");
             });
             // шторка «Оформление» — отдельный конфиг Quickshell
             args.push("nameless-themedrawer.desktop");

@@ -5,6 +5,7 @@ import Quickshell.Wayland
 // Первый запуск NameLess UI: выбор языка интерфейса (дальше меняется в «Пункт управления» → значок вида → «Язык»)
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property real progress: 0
     Component.onCompleted: progress = 1
     Behavior on progress { NumberAnimation { duration: 320; easing.type: Easing.OutCubic } }

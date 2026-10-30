@@ -1795,5 +1795,7 @@
 "Настройки Orbit на телефоне → Поведение: «Работать в фоне» и «Синхронизация при выключенном экране» (обе включены по умолчанию). Смахивание из недавних Orbit не останавливает — связь идёт без окна; выйти совсем — «Завершить Orbit». Если прошивка всё равно усыпляет приложение, нажмите «Снять ограничение» (работа без ограничений батареи). Постоянное уведомление по умолчанию скрыто.": "Orbit settings on the phone → Behaviour: «Run in background» and «Sync with screen off» (both on by default). Swiping Orbit away from recents does not stop it — the connection keeps running without a window; to quit for real use «Quit Orbit». If the phone still puts the app to sleep, tap «Remove restriction» (no battery limits). The persistent notification is hidden by default.",
 "Установка: ": "Installing: ",
 "Устанавливаю: ": "Installing: ",
-"Готово. Нажмите любую клавишу…": "Done. Press any key…"
+"Готово. Нажмите любую клавишу…": "Done. Press any key…",
+"Перезайти": "Log out",
+"Чтобы все изменения применились, перезайдите в сессию.": "To apply all changes, log out and back in."
 }

@@ -9,6 +9,7 @@ import Quickshell.Widgets
 // pick — режим выбора из дока («+»): клик закрепляет приложение, а не запускает
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property bool open: false
     property bool pick: false
     property real progress: open ? 1 : 0

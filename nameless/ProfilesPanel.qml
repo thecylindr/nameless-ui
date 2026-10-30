@@ -7,6 +7,7 @@ import Quickshell.Wayland
 //   «Не менять» — настройка остаётся как есть. Список и активный профиль запоминаются
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.profilesOpen : false
     function close() { if (shell) shell.profilesOpen = false; }

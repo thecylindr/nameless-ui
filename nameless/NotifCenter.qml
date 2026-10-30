@@ -6,6 +6,7 @@ import Quickshell.Widgets
 // Центр уведомлений: выезжает справа; «Не беспокоить», «Очистить всё», плеер, история
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property real progress: 0
     Component.onCompleted: progress = Qt.binding(function () { return Notifs.centerOpen ? 1 : 0; })
     Behavior on progress { NumberAnimation { duration: Theme.dur(Notifs.centerOpen); easing.type: Easing.OutCubic } }

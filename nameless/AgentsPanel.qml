@@ -9,6 +9,7 @@ import Quickshell.Wayland
 //   Сессии — кто запущен и что делает (agents.py).
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.agentsOpen : false
     function close() { if (shell) shell.agentsOpen = false; }
@@ -126,8 +127,8 @@ PanelWindow {
                     }
                     Meter {
                         visible: !w.codex && w.u && w.u.ok
-                        label: Tr.t("Неделя"); value: w.u && w.u.ok ? w.u.seven.util : 0
-                        note: w.u && w.u.ok ? Tr.t("сброс через ") + AgentsData.left(w.u.seven.resets) + " · " + AgentsData.clock(w.u.seven.resets) : ""
+                        label: Tr.t("Неделя"); value: w.u && w.u.ok && w.u.seven ? w.u.seven.util : 0
+                        note: w.u && w.u.ok && w.u.seven ? Tr.t("сброс через ") + AgentsData.left(w.u.seven.resets) + " · " + AgentsData.clock(w.u.seven.resets) : ""
                     }
                     Meter { visible: !w.codex && w.u && w.u.ok && w.u.sonnet !== null; label: Tr.t("Неделя · Sonnet"); value: w.u && w.u.sonnet ? w.u.sonnet.util || 0 : 0; note: "" }
                     Meter { visible: !w.codex && w.u && w.u.ok && w.u.opus !== null; label: Tr.t("Неделя · Opus"); value: w.u && w.u.opus ? w.u.opus.util || 0 : 0; note: "" }

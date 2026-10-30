@@ -17,7 +17,8 @@ act="${1:-}"
 # Orbit и шторка оформления theme.sh не обслуживает — они ниже
 if [[ -x "$THEME" && "$act" != orbit ]]; then exec "$THEME" action "$act"; fi
 
-running() { pgrep -f "(^|/)(qs|quickshell) -c $1\$" >/dev/null; }
+# после перезапуска Quickshell командная строка процесса теряет «-c имя», pgrep его не находит — поэтому ещё и опрос IPC
+running() { pgrep -f "(^|/)(qs|quickshell) -c $1\$" >/dev/null || timeout 2 qs -c "$1" ipc show >/dev/null 2>&1; }
 # вызов ipc NameLess: оболочка не запущена — запуск (qs-light.sh, если есть) и до 5 с ожидания
 nl() {
     if ! running nameless; then
@@ -25,7 +26,7 @@ nl() {
         setsid -f "$ql" -c nameless >"$HOME/.cache/nameless.log" 2>&1
         for _ in $(seq 50); do qs -c nameless ipc call "$@" 2>/dev/null && return 0; sleep 0.1; done
     fi
-    qs -c nameless ipc call "$@"
+    timeout 5 qs -c nameless ipc call "$@"
 }
 
 case "$act" in

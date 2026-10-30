@@ -10,6 +10,7 @@ import Quickshell.Wayland
 // Списки строятся по числу пунктов: изменение настройки не пересоздаёт строки (раньше от этого панель подлагивала)
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.desktopOpen : false
     function close() { if (shell) shell.desktopOpen = false; }

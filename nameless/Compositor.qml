@@ -28,6 +28,25 @@ Singleton {
         var real = screens.filter(function (s) { return !isVirtual(s); });
         return real.length > 0 ? real[0] : (Quickshell.screens.length > 0 ? Quickshell.screens[0] : null);
     }
+    // монитор для панелей: настоящий, на котором фокус. Окно без screen композитор ставит на монитор в фокусе, а фокус гуляет на
+    // виртуальный второй экран Orbit — панель оказывалась на невидимом выходе и пропадала вместе с ним при его удалении
+    property var panelScreen: mainScreen
+    function pickPanelScreen() {
+        var f = hyprland && Hyprland.focusedMonitor ? String(Hyprland.focusedMonitor.name) : "";
+        var s = screens;
+        var next = null;
+        for (var i = 0; i < s.length; i++) if (!isVirtual(s[i]) && String(s[i].name) === f) next = s[i];
+        // фокус на виртуальном мониторе — остаётся прежний настоящий, пока он существует
+        if (next === null && panelScreen !== null && s.indexOf(panelScreen) >= 0 && !isVirtual(panelScreen)) return;
+        if (next === null) next = mainScreen;
+        if (next !== panelScreen) panelScreen = next;
+    }
+    onScreensChanged: pickPanelScreen()
+    Component.onCompleted: pickPanelScreen()
+    Connections {
+        target: c.hyprland ? Hyprland : null
+        function onFocusedMonitorChanged() { c.pickPanelScreen(); }
+    }
     readonly property string name: hyprland ? "Hyprland" : (Quickshell.env("XDG_CURRENT_DESKTOP") || "Wayland")
 
     // рабочие столы (только Hyprland): обычные, по порядку

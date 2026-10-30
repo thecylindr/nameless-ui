@@ -12,6 +12,7 @@ import Quickshell.Wayland
 // диспетчер ничего не читает. Окно создаётся лениво (LazyLoader в shell.qml) и выгружается после закрытия.
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.tasksOpen : false
     function close() { if (shell) shell.tasksOpen = false; }
@@ -48,10 +49,15 @@ PanelWindow {
     // сборщик работает, только пока окно открыто
     Process {
         id: mon
-        running: w.open
+        running: w.open && !w.monPause
         command: ["python3", w.script, Perf.eco ? "2" : "1"]
         stdout: SplitParser { onRead: (line) => w.ingest(line) }
+        // сборщик упал при открытом окне — перезапуск (не чаще раза в секунду, не больше 5 раз подряд), иначе окно оставалось пустым
+        onExited: if (w.open && w.monTries++ < 5) { w.monPause = true; monRetry.restart(); }
     }
+    property int monTries: 0
+    property bool monPause: false
+    Timer { id: monRetry; interval: 1000; onTriggered: w.monPause = false }
     onVisibleChanged: if (!visible) { snap = null; h = ({}); rows.clear(); connRows.clear(); lastConns = []; selObj = null; }
 
     readonly property var colors: ({ cpu: "#4da3ff", mem: "#b57bff", nvidia: "#76b900", intel: "#2bb3e0", amd: "#ed1c24", disk: "#f5b83d", net: "#ff7a59", bat: "#34c759", other: "#9aa" })
@@ -74,7 +80,10 @@ PanelWindow {
         var d;
         try { d = JSON.parse(line); } catch (e) { return; }
         if (d.hello) { hello = d.hello; resources = buildResources(d.hello); return; }
+        // неполная запись (сборщик перезапущен или упал на чтении) пропускается, а не ломает окно ошибками
+        if (!d.cpu || !d.mem || !d.disk || !d.net || !d.gpus) return;
         snap = d;
+        monTries = 0;
         push("cpu", d.cpu.total);
         push("mem", d.mem.total > 0 ? d.mem.used / d.mem.total * 100 : 0);
         push("disk.r", d.disk.read); push("disk.w", d.disk.write);
@@ -259,7 +268,7 @@ PanelWindow {
     onNetViewChanged: Qt.callLater(syncConns)
     onOnlyWanChanged: Qt.callLater(syncConns)
     onPtabChanged: if (ptab === 0) { syncRows(); search.forceActiveFocus(); }
-    onOpenChanged: if (open && ptab === 0) search.forceActiveFocus()
+    onOpenChanged: { monTries = 0; if (open && ptab === 0) search.forceActiveFocus(); }
     ListModel { id: rows }
 
     // ---------- окно ----------

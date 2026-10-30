@@ -10,6 +10,7 @@ import Quickshell.Wayland
 // для них есть отключение истории в настройках (Config.store.clipboard.on)
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.clipboardOpen : false
     function close() { if (shell) shell.clipboardOpen = false; }

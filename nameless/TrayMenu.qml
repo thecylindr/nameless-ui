@@ -9,6 +9,7 @@ import Quickshell.Widgets
 // пункты DBusMenu отдаёт QsMenuOpener, клик — triggered(); клик мимо или Esc — закрыть
 PanelWindow {
     id: m
+    screen: Compositor.panelScreen
     property var item: null                // SystemTrayItem
     property var stack: []                 // открытые подменю
     readonly property var current: stack.length > 0 ? stack[stack.length - 1] : (item ? item.menu : null)

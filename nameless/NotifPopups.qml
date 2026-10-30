@@ -5,6 +5,7 @@ import Quickshell.Wayland
 // Всплывающие уведомления справа сверху: исчезают через 6 с (важные — по закрытию), наведение ставит таймер на паузу
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     anchors { top: true; right: true }
     margins { top: 0; right: 0 }
     // запас 24 px вокруг карточек под тень

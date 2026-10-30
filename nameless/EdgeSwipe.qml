@@ -8,6 +8,7 @@ import Quickshell.Wayland
 // Полоска у края тонкая: на сенсорном экране — 14 px, иначе — 3 px; в режиме off её нет
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     property bool hasTouch: false
     Process {

@@ -16,10 +16,16 @@ Singleton {
 
     readonly property string rgbScript: Quickshell.env("HOME") + "/.config/glassrice/rice"
     Process { id: rgbProc }
+    // после смены профиля — просьба перезайти в сессию: часть настроек (анимации и размытие Hyprland, режим видеокарты) полностью применяется только так
+    Process {
+        id: reloginAsk
+        stdout: StdioCollector { onStreamFinished: if (text.trim() === "relogin") Compositor.logout(); }
+    }
 
     function apply(id) {
         var pr = find(id);
         if (!pr) return;
+        var changed = id !== active;
         Config.set("profiles.active", id);
         if (pr.dnd === "on" || pr.dnd === "off") Notifs.dnd = pr.dnd === "on";
         if (pr.caffeine === "on" || pr.caffeine === "off") Sys.setCaffeine(pr.caffeine === "on");
@@ -34,7 +40,12 @@ Singleton {
         // подсветка: выкл — погасить, вкл — вернуть сохранённый цвет
         if (pr.rgb === "off" || pr.rgb === "on")
             Quickshell.execDetached(["sh", "-c", "for d in \"$(cat \"$HOME/.config/glassrice/rice\" 2>/dev/null)\" \"$HOME/.local/share/nameless\"; do [ -n \"$d\" ] && [ -f \"$d/scripts/system/rgb.sh\" ] && exec bash \"$d/scripts/system/rgb.sh\" " + (pr.rgb === "off" ? "off" : "restore") + "; done"]);
-        Quickshell.execDetached(["notify-send", "-a", Tr.t("Профили"), Tr.t("Профиль «") + pr.name + "»", summary(pr)]);
+        var title = Tr.t("Профиль «") + pr.name + "»";
+        if (!changed) { Quickshell.execDetached(["notify-send", "-a", Tr.t("Профили"), title, summary(pr)]); return; }
+        reloginAsk.running = false;
+        reloginAsk.command = ["notify-send", "-a", Tr.t("Профили"), "-A", "relogin=" + Tr.t("Перезайти"), "-A", "later=" + Tr.t("Позже"), "--wait", title,
+                              (summary(pr) ? summary(pr) + "\n" : "") + Tr.t("Чтобы все изменения применились, перезайдите в сессию.")];
+        reloginAsk.running = true;
     }
     function next() { var i = 0; for (var k = 0; k < list.length; k++) if (list[k].id === active) i = k; apply(list[(i + 1) % list.length].id); }
 

@@ -9,6 +9,7 @@ import Quickshell.Wayland
 // «Сохранить»: Hyprland — ~/.config/hypr/monitors.lua (его подключает hyprland.lua); driftwm — [[outputs]] в ~/.config/driftwm/config.toml
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.displayOpen : false
     function close() { if (shell) shell.displayOpen = false; }

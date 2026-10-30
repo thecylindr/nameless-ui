@@ -5,6 +5,7 @@ import Quickshell.Wayland
 // Приветствие при запуске: плашка «NameLess UI» с названием темы на 2.5 с
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property bool shown: false
     property real progress: shown ? 1 : 0
     Behavior on progress { NumberAnimation { duration: 420; easing.type: Easing.OutCubic } }

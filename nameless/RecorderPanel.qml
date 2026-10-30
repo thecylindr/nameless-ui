@@ -8,6 +8,7 @@ import Quickshell.Wayland
 // Значения лежат в Config.store.rec; саму запись делает Recorder.qml (gpu-screen-recorder или wf-recorder, GIF — через ffmpeg)
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     readonly property bool open: shell ? shell.recorderOpen : false
     function close() { if (shell) shell.recorderOpen = false; }

@@ -10,6 +10,7 @@ import Quickshell.Wayland
 //   клик — подробности, флажок — выбрать несколько, правый клик — меню (открыть, в каталог, убрать из каталога)
 PanelWindow {
     id: w
+    screen: Compositor.panelScreen
     property var shell: null
     property bool open: false
     property real progress: open ? 1 : 0
